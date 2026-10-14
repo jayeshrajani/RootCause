@@ -10,12 +10,14 @@ dependencies = [
   "pydantic>=2.8,<3",
   "pydantic-settings>=2.4,<3",
   "python-multipart>=0.0.9",
+  "httpx>=0.27",
+  # Use the OS certificate store so TLS works behind corporate proxies.
+  "truststore>=0.10",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3",
-  "httpx>=0.27",
   "ruff>=0.6",
   "mypy>=1.11",
 ]

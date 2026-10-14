@@ -20,8 +20,15 @@ VALID_FORM = {
 
 
 @pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
+@pytest.fixture
 def settings() -> Settings:
-    return Settings(environment="test", max_image_bytes=1024, _env_file=None)
+    return Settings(
+        environment="test", max_image_bytes=1024, analysis_provider="mock", _env_file=None
+    )
 
 
 @pytest.fixture

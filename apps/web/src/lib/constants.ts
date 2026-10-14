@@ -58,6 +58,5 @@ export const MAX_IMAGES = 3;
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
-export const DESCRIPTION_MIN = 10;
 export const DESCRIPTION_MAX = 2000;
 export const LOCATION_LABEL_MAX = 120;

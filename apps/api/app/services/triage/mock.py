@@ -21,24 +21,23 @@ from app.schemas.triage import (
     PossibleCause,
     RecommendedAction,
     SourceKind,
-    SymptomDuration,
     TriageResponse,
     TriageStatus,
     UrgencyLevel,
+)
+from app.services.triage.common import (
+    crop_name,
+    duration_label,
+    farmer_report_evidence,
+    farmer_report_source,
+    not_integrated_evidence,
+    not_integrated_sources,
 )
 
 MOCK_DISCLAIMER = (
     "MOCK RESULT for development only. The photos and description were received but not "
     "analysed. Do not act on this assessment."
 )
-
-_DURATION_LABELS: dict[SymptomDuration, str] = {
-    SymptomDuration.LESS_THAN_3_DAYS: "less than 3 days",
-    SymptomDuration.THREE_TO_7_DAYS: "3 to 7 days",
-    SymptomDuration.ONE_TO_2_WEEKS: "1 to 2 weeks",
-    SymptomDuration.MORE_THAN_2_WEEKS: "more than 2 weeks",
-    SymptomDuration.NOT_SURE: "not sure",
-}
 
 _NOT_ANALYSED = "Not assessed: mock mode does not analyse photos, weather or field history."
 
@@ -62,12 +61,9 @@ class MockTriageService:
         self._id_factory = id_factory
 
     async def assess(self, report: FarmerReport) -> TriageResponse:
-        crop_name = report.crop.value.replace("_", " ")
+        crop = crop_name(report) or "crop"
         photo_count = len(report.images)
-        duration = (
-            _DURATION_LABELS[report.symptom_duration] if report.symptom_duration else "not given"
-        )
-        farmer_evidence = f"Farmer-reported symptoms on {crop_name} (duration: {duration})"
+        farmer_evidence = f"Farmer report on {crop} (duration: {duration_label(report)})"
 
         return TriageResponse(
             report_id=self._id_factory(),
@@ -75,7 +71,7 @@ class MockTriageService:
             analysis_mode=AnalysisMode.MOCK,
             crop=report.crop,
             summary=(
-                f"[MOCK] Placeholder assessment for a {crop_name} report with {photo_count} "
+                f"[MOCK] Placeholder assessment for a {crop} report with {photo_count} "
                 "photo(s). The cause has not been determined; the hypotheses below are "
                 "generic examples, not a diagnosis."
             ),
@@ -120,15 +116,7 @@ class MockTriageService:
                 ),
             ],
             evidence=[
-                Evidence(
-                    id="ev_farmer_report",
-                    source=SourceKind.FARMER_REPORT,
-                    availability=EvidenceAvailability.AVAILABLE,
-                    observation=(
-                        f"Farmer described symptoms on {crop_name}; reported duration: {duration}."
-                    ),
-                    observed_at=report.received_at,
-                ),
+                farmer_report_evidence(report),
                 Evidence(
                     id="ev_photos",
                     source=SourceKind.PHOTO,
@@ -139,26 +127,7 @@ class MockTriageService:
                     ),
                     observed_at=report.received_at,
                 ),
-                Evidence(
-                    id="ev_weather",
-                    source=SourceKind.WEATHER,
-                    availability=EvidenceAvailability.NOT_INTEGRATED,
-                    observation=(
-                        "No weather data was retrieved. Do not assume conditions were normal."
-                    ),
-                ),
-                Evidence(
-                    id="ev_satellite",
-                    source=SourceKind.SATELLITE,
-                    availability=EvidenceAvailability.NOT_INTEGRATED,
-                    observation="No satellite vegetation data was retrieved.",
-                ),
-                Evidence(
-                    id="ev_knowledge",
-                    source=SourceKind.KNOWLEDGE_BASE,
-                    availability=EvidenceAvailability.NOT_INTEGRATED,
-                    observation="No agricultural guidance was retrieved; no sources are cited.",
-                ),
+                *not_integrated_evidence(),
             ],
             missing_information=[
                 MissingInformation(
@@ -201,13 +170,7 @@ class MockTriageService:
             requires_expert_review=True,
             generated_at=self._clock(),
             data_sources=[
-                DataSource(
-                    id="src_farmer_report",
-                    name="Farmer report",
-                    kind=SourceKind.FARMER_REPORT,
-                    status=DataSourceStatus.USED,
-                    description="Crop, description, duration and approximate location.",
-                ),
+                farmer_report_source(),
                 DataSource(
                     id="src_photos",
                     name="Uploaded photos",
@@ -222,27 +185,7 @@ class MockTriageService:
                     status=DataSourceStatus.USED,
                     description="Deterministic placeholder output for development.",
                 ),
-                DataSource(
-                    id="src_weather",
-                    name="Weather (Open-Meteo)",
-                    kind=SourceKind.WEATHER,
-                    status=DataSourceStatus.NOT_INTEGRATED,
-                    description="Planned for Milestone 2.",
-                ),
-                DataSource(
-                    id="src_satellite",
-                    name="Satellite vegetation indices",
-                    kind=SourceKind.SATELLITE,
-                    status=DataSourceStatus.NOT_INTEGRATED,
-                    description="Planned for Milestone 3.",
-                ),
-                DataSource(
-                    id="src_knowledge",
-                    name="Agricultural knowledge base",
-                    kind=SourceKind.KNOWLEDGE_BASE,
-                    status=DataSourceStatus.NOT_INTEGRATED,
-                    description="Planned for Milestone 4.",
-                ),
+                *not_integrated_sources(),
             ],
             disclaimer=MOCK_DISCLAIMER,
         )

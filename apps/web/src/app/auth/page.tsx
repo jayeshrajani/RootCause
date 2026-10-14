@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 
+import { ArrowLeft } from "lucide-react";
+
 import { AnimatedLeaf } from "@/components/brand/animated-leaf";
 import { BotanicalPattern } from "@/components/brand/botanical";
-import { BracketLink, Logo } from "@/components/brand/logo";
-import { AuthForm } from "@/components/auth/auth-form";
+import { ButtonLink } from "@/components/brand/button";
+import { Logo } from "@/components/brand/logo";
+import { AuthForm, SkipButton } from "@/components/auth/auth-form";
 import { Reveal } from "@/components/motion/reveal";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -26,11 +29,13 @@ export default function AuthPage() {
       </aside>
 
       <section className="grain flex flex-col bg-mint-50 px-5 py-5 sm:px-10">
-        <div className="flex items-center justify-between lg:justify-start">
+        <div className="flex items-center justify-between gap-3">
           <Logo className="lg:hidden" />
-          <BracketLink href="/" className="text-forest-700 hover:text-forest-900">
-            Back home
-          </BracketLink>
+          <ButtonLink href="/" variant="ghost" className="-ml-2 hidden lg:inline-flex">
+            <ArrowLeft aria-hidden />
+            Home
+          </ButtonLink>
+          <SkipButton />
         </div>
         <div className="flex flex-1 items-center justify-center py-8">
           <Reveal className="flex w-full justify-center">

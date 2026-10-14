@@ -5,14 +5,12 @@ import { useRouter } from "next/navigation";
 import { FormProvider, useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertCircle, ArrowLeft, ArrowRight, Send } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
 
 import { pillClass, PillIcon } from "@/components/brand/pill";
-import { CropStep } from "@/components/farmer/steps/crop-step";
-import { LocationStep } from "@/components/farmer/steps/location-step";
+import { AnalysingOverlay } from "@/components/farmer/analysing-overlay";
+import { DescribeStep } from "@/components/farmer/steps/describe-step";
 import { PhotoStep } from "@/components/farmer/steps/photo-step";
-import { ReviewStep } from "@/components/farmer/steps/review-step";
-import { SymptomsStep } from "@/components/farmer/steps/symptoms-step";
 import { Spinner } from "@/components/ui/spinner";
 import { ApiError, submitTriageReport } from "@/lib/api/client";
 import {
@@ -28,42 +26,24 @@ type FieldName = FieldPath<ReportFormInput>;
 
 const STEPS: { label: string; title: string; help: string; fields: FieldName[] }[] = [
   {
-    label: "Crop",
-    title: "Which crop is affected?",
-    help: "Pick the closest match.",
-    fields: ["crop"],
-  },
-  {
     label: "Photos",
     title: "Show us the problem.",
     help: "One to three clear close-ups. A healthy leaf next to a sick one helps a lot.",
     fields: ["images"],
   },
   {
-    label: "Symptoms",
-    title: "What do you see?",
-    help: "Tap what matches, then add anything else in your own words.",
-    fields: ["description", "symptom_duration"],
-  },
-  {
-    label: "Location",
-    title: "Roughly where is the field?",
-    help: "Used for local weather and satellite context. About 1 km is close enough.",
-    fields: ["latitude", "longitude", "location_label"],
-  },
-  {
-    label: "Review",
-    title: "Ready to send?",
-    help: "Check your report. You can change anything before sending.",
-    fields: [],
+    label: "Describe",
+    title: "What can't the camera see?",
+    help: "Optional, but it sharpens the result: when it started, how much of the field, any recent spraying or watering.",
+    fields: ["description", "crop", "symptom_duration", "latitude", "longitude", "location_label"],
   },
 ];
 
 const ERROR_TITLES: Record<ApiError["kind"], string> = {
   network: "Couldn't reach RootCause",
-  timeout: "The request timed out",
+  timeout: "The analysis took too long",
   validation: "Please check your report",
-  server: "Something went wrong",
+  server: "Analysis didn't finish",
 };
 
 const slide = {
@@ -75,7 +55,6 @@ const slide = {
 export function ReportWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [reached, setReached] = useState(0);
   const [direction, setDirection] = useState(1);
   const [submitError, setSubmitError] = useState<ApiError | null>(null);
 
@@ -84,43 +63,47 @@ export function ReportWizard() {
     defaultValues: reportFormDefaults,
     mode: "onTouched",
   });
-  const { trigger, handleSubmit, setError, formState } = form;
+  const { trigger, handleSubmit, setError, getValues, formState } = form;
   const isLast = step === STEPS.length - 1;
   const current = STEPS[step]!;
 
   const goTo = (next: number) => {
     setDirection(next > step ? 1 : -1);
     setStep(next);
-    setReached((r) => Math.max(r, next));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const submit = handleSubmit(async (values) => {
-    setSubmitError(null);
-    try {
-      const result = await submitTriageReport(values);
-      saveLatestTriage(result);
-      router.push("/results");
-    } catch (error) {
-      const apiError =
-        error instanceof ApiError
-          ? error
-          : new ApiError("server", "Something unexpected went wrong. Please try again.");
-      let firstStep = -1;
-      for (const { field, message } of apiError.fieldErrors) {
-        const index = STEPS.findIndex((s) => s.fields.includes(field as FieldName));
-        if (index >= 0) {
-          setError(field as FieldName, { type: "server", message });
-          if (firstStep < 0 || index < firstStep) firstStep = index;
+  const stepOf = (field: string) => STEPS.findIndex((s) => s.fields.includes(field as FieldName));
+
+  const submit = handleSubmit(
+    async (values) => {
+      setSubmitError(null);
+      try {
+        const result = await submitTriageReport(values);
+        saveLatestTriage(result);
+        router.push("/results");
+      } catch (error) {
+        const apiError =
+          error instanceof ApiError
+            ? error
+            : new ApiError("server", "Something unexpected went wrong. Please try again.");
+        let first = -1;
+        for (const { field, message } of apiError.fieldErrors) {
+          const index = stepOf(field);
+          if (index >= 0) {
+            setError(field as FieldName, { type: "server", message });
+            if (first < 0 || index < first) first = index;
+          }
         }
+        setSubmitError(apiError);
+        if (first >= 0 && first !== step) goTo(first);
       }
-      setSubmitError(apiError);
-      if (firstStep >= 0) goTo(firstStep);
-    }
-  }, (errors) => {
-    const index = STEPS.findIndex((s) => s.fields.some((f) => f in errors));
-    if (index >= 0) goTo(index);
-  });
+    },
+    (errors) => {
+      const index = Math.min(...Object.keys(errors).map(stepOf).filter((i) => i >= 0));
+      if (Number.isFinite(index) && index !== step) goTo(index);
+    },
+  );
 
   const next = async () => {
     if (isLast) return submit();
@@ -129,6 +112,10 @@ export function ReportWizard() {
 
   return (
     <FormProvider {...form}>
+      <AnimatePresence>
+        {formState.isSubmitting ? <AnalysingOverlay photo={getValues("images")[0]} /> : null}
+      </AnimatePresence>
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -140,16 +127,16 @@ export function ReportWizard() {
         <nav aria-label="Report progress" className="mb-10">
           <div className="mb-3 flex items-baseline justify-between">
             <p className="label-caps text-forest-600">
-              Step {String(step + 1).padStart(2, "0")} / {String(STEPS.length).padStart(2, "0")}
+              Step {step + 1} of {STEPS.length}
             </p>
             <p className="label-caps text-forest-900/50">{current.label}</p>
           </div>
-          <ol className="grid grid-cols-5 gap-1.5">
+          <ol className="grid grid-cols-2 gap-1.5">
             {STEPS.map((s, i) => (
               <li key={s.label}>
                 <button
                   type="button"
-                  disabled={i > reached || formState.isSubmitting}
+                  disabled={i > step || formState.isSubmitting}
                   onClick={() => goTo(i)}
                   aria-label={`${s.label}${i === step ? " (current)" : ""}`}
                   aria-current={i === step ? "step" : undefined}
@@ -188,11 +175,7 @@ export function ReportWizard() {
             </h1>
             <p className="mt-3 mb-8 max-w-lg text-muted-foreground sm:text-lg">{current.help}</p>
 
-            {step === 0 ? <CropStep /> : null}
-            {step === 1 ? <PhotoStep /> : null}
-            {step === 2 ? <SymptomsStep /> : null}
-            {step === 3 ? <LocationStep /> : null}
-            {step === 4 ? <ReviewStep goTo={goTo} /> : null}
+            {step === 0 ? <PhotoStep /> : <DescribeStep />}
           </motion.section>
         </AnimatePresence>
 
@@ -229,12 +212,12 @@ export function ReportWizard() {
               Back
             </button>
             <button type="submit" disabled={formState.isSubmitting} className={pillClass("dark")}>
-              {isLast ? (formState.isSubmitting ? "Sending…" : "Get triage") : "Continue"}
+              {isLast ? "Get triage" : "Continue"}
               <PillIcon>
                 {formState.isSubmitting ? (
                   <Spinner className="size-4" />
                 ) : isLast ? (
-                  <Send className="size-4" />
+                  <Sparkles className="size-4" />
                 ) : (
                   <ArrowRight className="size-4" />
                 )}

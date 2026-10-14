@@ -32,13 +32,16 @@ function isApiErrorBody(value: unknown): value is ApiErrorBody {
 
 function toFormData(values: ReportFormValues): FormData {
   const form = new FormData();
-  form.append("crop", values.crop);
-  form.append("description", values.description);
-  form.append("latitude", values.latitude);
-  form.append("longitude", values.longitude);
-  if (values.symptom_duration) form.append("symptom_duration", values.symptom_duration);
-  if (values.location_label) form.append("location_label", values.location_label);
   for (const image of values.images) form.append("images", image, image.name);
+  const optional = {
+    description: values.description,
+    crop: values.crop,
+    symptom_duration: values.symptom_duration,
+    latitude: values.latitude,
+    longitude: values.longitude,
+    location_label: values.location_label,
+  };
+  for (const [key, value] of Object.entries(optional)) if (value) form.append(key, value);
   return form;
 }
 

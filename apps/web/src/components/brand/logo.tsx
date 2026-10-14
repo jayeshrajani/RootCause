@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -31,47 +30,5 @@ export function Logo({ className, href = "/" }: { className?: string; href?: str
       <LogoMark />
       RootCause
     </Link>
-  );
-}
-
-type BracketProps = { children: React.ReactNode; className?: string };
-
-function BracketInner({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <span aria-hidden className="transition-transform duration-300 ease-out-expo group-hover:-translate-x-1">
-        [
-      </span>
-      <span className="label-caps">{children}</span>
-      <span aria-hidden className="transition-transform duration-300 ease-out-expo group-hover:translate-x-1">
-        ]
-      </span>
-    </>
-  );
-}
-
-const bracketClass = "group inline-flex items-center gap-2.5 py-2 text-sm";
-
-export function BracketLink({
-  className,
-  children,
-  ...props
-}: BracketProps & ComponentProps<typeof Link>) {
-  return (
-    <Link className={cn(bracketClass, className)} {...props}>
-      <BracketInner>{children}</BracketInner>
-    </Link>
-  );
-}
-
-export function BracketButton({
-  className,
-  children,
-  ...props
-}: BracketProps & ComponentProps<"button">) {
-  return (
-    <button type="button" className={cn(bracketClass, "cursor-pointer", className)} {...props}>
-      <BracketInner>{children}</BracketInner>
-    </button>
   );
 }

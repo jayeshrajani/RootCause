@@ -33,6 +33,7 @@ class SymptomDuration(StrEnum):
 
 class AnalysisMode(StrEnum):
     MOCK = "mock"
+    AI = "ai"
 
 
 class TriageStatus(StrEnum):
@@ -114,6 +115,9 @@ class RecommendedAction(BaseModel):
     rationale: str
     priority: ActionPriority
     requires_expert_verification: bool
+    addresses: str | None = Field(
+        default=None, description="The symptom or possible cause this step targets."
+    )
 
 
 class DataSource(BaseModel):
@@ -129,7 +133,10 @@ class TriageResponse(BaseModel):
     report_id: str
     status: TriageStatus
     analysis_mode: AnalysisMode
-    crop: Crop
+    crop: Crop | None = Field(description="Crop the farmer selected, if any.")
+    detected_crop: str | None = Field(
+        default=None, description="Crop the photos appear to show (AI-read, unconfirmed)."
+    )
     summary: str
     urgency: UrgencyLevel
     urgency_reason: str

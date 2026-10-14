@@ -10,3 +10,4 @@ class HealthResponse(BaseModel):
     service: str
     version: str
     analysis_mode: AnalysisMode
+    model: str | None = None

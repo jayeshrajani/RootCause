@@ -26,7 +26,7 @@ export const SYMPTOM_DURATIONS = [
 ] as const;
 export type SymptomDuration = (typeof SYMPTOM_DURATIONS)[number];
 
-export type AnalysisMode = "mock";
+export type AnalysisMode = "mock" | "ai";
 export type TriageStatus = "completed" | "insufficient_information";
 export type UrgencyLevel = "low" | "moderate" | "high" | "critical";
 export type ConfidenceLevel = "low" | "medium" | "high";
@@ -72,6 +72,7 @@ export interface RecommendedAction {
   rationale: string;
   priority: ActionPriority;
   requires_expert_verification: boolean;
+  addresses: string | null;
 }
 
 export interface DataSource {
@@ -87,7 +88,8 @@ export interface TriageResponse {
   report_id: string;
   status: TriageStatus;
   analysis_mode: AnalysisMode;
-  crop: Crop;
+  crop: Crop | null;
+  detected_crop: string | null;
   summary: string;
   urgency: UrgencyLevel;
   urgency_reason: string;

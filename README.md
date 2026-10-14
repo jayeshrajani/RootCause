@@ -13,9 +13,11 @@ RootCause is not a disease classifier. It helps a farmer answer:
 Observations, hypotheses, missing evidence and recommendations are always kept separate. Model
 output is never presented as a confirmed diagnosis.
 
-> **Status: Milestone 0.** The full flow works end to end, but the API returns a
-> **deterministic mock** assessment (`analysis_mode: "mock"`). No Gemini, weather, satellite or
-> knowledge sources are connected yet. See [docs/roadmap.md](docs/roadmap.md).
+> **Status: photo analysis live.** With `CEREBRAS_API_KEY` set, photos and the farmer's text are
+> analysed by **Qwen 3.8 (27B) on Cerebras**, validated against a strict schema and safety-checked.
+> Without a key the API returns a clearly labelled **mock** (`analysis_mode: "mock"`). Weather,
+> satellite and knowledge sources are not connected yet. Gemini is planned but blocked on the LSEG
+> network. See [docs/roadmap.md](docs/roadmap.md).
 
 ## Repository layout
 
@@ -66,7 +68,9 @@ The web app calls `http://localhost:8000` by default. To change it, create `apps
 with `NEXT_PUBLIC_API_BASE_URL=...`. If you run the web app on a different port, add that origin
 to `ROOTCAUSE_CORS_ORIGINS` in `.env`.
 
-No API keys are required for Milestone 0.
+No API keys are required: without one, the API returns labelled mock results. For real photo
+analysis, set `CEREBRAS_API_KEY` in the repo-root `.env` (never commit it) and restart the API;
+`/api/v1/health` then reports `"analysis_mode": "ai"`.
 
 ## Checks (same as CI)
 
@@ -86,9 +90,11 @@ npm run lint && npm run typecheck && npm run build
 - [Decision records](docs/decisions/)
 - [Contributing](CONTRIBUTING.md)
 
-## Known limitations (Milestone 0)
+## Known limitations
 
-- Triage output is mock data; photos are validated but never analysed.
+- AI triage sees only the photos and the farmer's text; weather, satellite data and references
+  are not checked yet. Output is hypotheses, never a diagnosis.
+- Voice notes are not implemented yet (the mic button is disabled).
 - Results are not persisted. The latest result is kept in the browser tab's `sessionStorage`.
 - No authentication or rate limiting; do not deploy publicly as-is.
 - Requests without a `Content-Length` header skip the early total-size check (each photo is

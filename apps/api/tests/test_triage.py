@@ -33,12 +33,20 @@ def test_mock_never_claims_external_evidence(client: TestClient) -> None:
         assert evidence[source]["observed_at"] is None
 
 
-def test_optional_fields_can_be_omitted(client: TestClient) -> None:
-    data = {k: v for k, v in VALID_FORM.items() if k not in ("location_label", "symptom_duration")}
-
-    response = client.post("/api/v1/triage", data=data, files=[jpeg()])
+def test_photo_alone_is_a_valid_report(client: TestClient) -> None:
+    response = client.post("/api/v1/triage", files=[jpeg()])
 
     assert response.status_code == 200, response.text
+    assert response.json()["crop"] is None
+
+
+@pytest.mark.parametrize("present", ["latitude", "longitude"])
+def test_coordinates_must_be_given_together(client: TestClient, present: str) -> None:
+    response = client.post("/api/v1/triage", data={present: "18.5"}, files=[jpeg()])
+
+    assert response.status_code == 422
+    missing = "longitude" if present == "latitude" else "latitude"
+    assert response.json()["error"]["details"][0]["field"] == missing
 
 
 def test_missing_images_is_rejected(client: TestClient) -> None:
@@ -82,7 +90,7 @@ def test_oversized_image_is_rejected(client: TestClient) -> None:
         ("longitude", "-181"),
         ("latitude", "nan"),
         ("crop", "banana-tree"),
-        ("description", "short"),
+        ("description", "x" * 2001),
         ("symptom_duration", "forever"),
     ],
 )
@@ -105,15 +113,6 @@ def test_request_over_total_size_limit_is_rejected_early(client: TestClient) -> 
 
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "request_too_large"
-
-
-def test_missing_required_field_is_reported(client: TestClient) -> None:
-    data = {k: v for k, v in VALID_FORM.items() if k != "crop"}
-
-    response = client.post("/api/v1/triage", data=data, files=[jpeg()])
-
-    assert response.status_code == 422
-    assert "crop" in {d["field"] for d in response.json()["error"]["details"]}
 
 
 def test_sensitive_report_data_is_not_logged(

@@ -8,7 +8,7 @@ import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 
-import { BracketButton } from "@/components/brand/logo";
+import { Button } from "@/components/brand/button";
 import { pillClass, PillIcon } from "@/components/brand/pill";
 import { TextField } from "@/components/forms/text-field";
 import { Spinner } from "@/components/ui/spinner";
@@ -46,6 +46,22 @@ const COPY: Record<Mode, { title: string; subtitle: string; submit: string }> = 
 
 const NEXT_ROUTE = "/report";
 
+export function SkipButton() {
+  const router = useRouter();
+  return (
+    <Button
+      variant="outline"
+      onClick={() => {
+        saveProfile({ kind: "guest" });
+        router.push(NEXT_ROUTE);
+      }}
+    >
+      Skip for now
+      <ArrowRight className="transition-transform group-hover:translate-x-0.5" aria-hidden />
+    </Button>
+  );
+}
+
 export function AuthForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -81,12 +97,6 @@ export function AuthForm() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="mb-10 flex justify-end">
-        <BracketButton onClick={skip} className="text-forest-700 hover:text-forest-900">
-          Skip for now
-        </BracketButton>
-      </div>
-
       <LayoutGroup>
         <div
           role="tablist"

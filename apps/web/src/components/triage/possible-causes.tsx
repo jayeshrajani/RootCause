@@ -8,18 +8,27 @@ import { CONFIDENCE_DISPLAY } from "@/components/triage/display";
 import { cn } from "@/lib/utils";
 import type { PossibleCause } from "@/types/triage";
 
-function ConfidenceMeter({ level, label }: { level: number; label: string }) {
+export function ConfidenceMeter({
+  level,
+  label,
+  tone = "light",
+}: {
+  level: number;
+  label: string;
+  tone?: "light" | "dark";
+}) {
+  const on = tone === "dark" ? "bg-mint-300" : "bg-forest-700";
+  const off = tone === "dark" ? "bg-mint-100/20" : "bg-forest-900/15";
   return (
     <span className="inline-flex items-center gap-2" title={label}>
       <span className="flex gap-0.5" aria-hidden>
         {[1, 2, 3].map((n) => (
-          <span
-            key={n}
-            className={cn("h-3 w-1 rounded-full", n <= level ? "bg-forest-700" : "bg-forest-900/15")}
-          />
+          <span key={n} className={cn("h-3 w-1 rounded-full", n <= level ? on : off)} />
         ))}
       </span>
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={cn("text-xs", tone === "dark" ? "text-mint-200/70" : "text-muted-foreground")}>
+        {label}
+      </span>
     </span>
   );
 }
@@ -59,10 +68,10 @@ function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: 
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center gap-4 p-5 text-left sm:p-6"
+        className="flex w-full items-center gap-4 p-4 text-left sm:px-5"
       >
-        <span className="flex-1 space-y-1.5">
-          <span className="block text-lg leading-snug font-medium">{cause.name}</span>
+        <span className="flex-1 space-y-1">
+          <span className="block leading-snug font-medium sm:text-lg">{cause.name}</span>
           <ConfidenceMeter level={confidence.level} label={confidence.label} />
         </span>
         <motion.span
@@ -82,8 +91,8 @@ function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: 
             transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-            <div className="space-y-5 px-5 pb-6 sm:px-6">
-              <p className="leading-relaxed text-forest-900/85">{cause.explanation}</p>
+            <div className="space-y-4 px-4 pb-5 sm:px-5">
+              <p className="text-[15px] leading-relaxed text-forest-900/85">{cause.explanation}</p>
               <div className="grid gap-5 rounded-2xl bg-mint-50 p-4 sm:grid-cols-2">
                 <EvidenceColumn title="Supports" items={cause.supporting_evidence} empty="Nothing yet." positive />
                 <EvidenceColumn
@@ -107,7 +116,7 @@ function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: 
 
 export function PossibleCauses({ causes }: { causes: PossibleCause[] }) {
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-2.5">
       {causes.map((cause, i) => (
         <CauseItem key={cause.name} cause={cause} defaultOpen={i === 0} />
       ))}

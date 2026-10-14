@@ -9,31 +9,36 @@ Base path: `/api/v1`. All timestamps are ISO 8601 in UTC.
 ## `GET /health`
 
 ```json
-{ "status": "ok", "service": "rootcause-api", "version": "0.1.0", "analysis_mode": "mock" }
+{ "status": "ok", "service": "rootcause-api", "version": "0.1.0", "analysis_mode": "ai", "model": "qwen-3.8-27b" }
 ```
+
+`analysis_mode` is `ai` when an analysis provider is configured (currently Cerebras), else `mock`.
 
 ## `POST /triage`
 
-`Content-Type: multipart/form-data`
+`Content-Type: multipart/form-data`. Only photos are required; everything else sharpens the result.
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
-| `crop` | enum | yes | `rice`, `wheat`, `maize`, `cotton`, `sugarcane`, `soybean`, `groundnut`, `chickpea`, `tomato`, `potato`, `onion`, `chilli`, `other` |
-| `description` | string | yes | 10–2000 characters |
-| `latitude` | number | yes | −90 to 90, finite |
-| `longitude` | number | yes | −180 to 180, finite |
-| `location_label` | string | no | ≤ 120 characters |
+| `images` | file (repeat) | **yes** | 1–3 files; JPEG/PNG/WebP by file signature; ≤ 5 MB each |
+| `description` | string | no | ≤ 2000 characters (later: voice transcript) |
+| `crop` | enum | no | `rice`, `wheat`, `maize`, `cotton`, `sugarcane`, `soybean`, `groundnut`, `chickpea`, `tomato`, `potato`, `onion`, `chilli`, `other` |
 | `symptom_duration` | enum | no | `less_than_3_days`, `3_to_7_days`, `1_to_2_weeks`, `more_than_2_weeks`, `not_sure` |
-| `images` | file (repeat) | yes | 1–3 files; JPEG/PNG/WebP by file signature; ≤ 5 MB each |
+| `latitude` | number | no* | −90 to 90, finite |
+| `longitude` | number | no* | −180 to 180, finite |
+| `location_label` | string | no | ≤ 120 characters |
+
+\* Latitude and longitude must be sent together or not at all.
 
 ### 200 response: `TriageResponse`
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `report_id` | string | Mock IDs start with `mock_` |
-| `status` | `completed` \| `insufficient_information` | |
-| `analysis_mode` | `mock` | Later: real modes. Clients must show a clear banner for `mock` |
-| `crop` | enum | Echo of input |
+| `report_id` | string | `mock_…` for mock results, `rpt_…` for AI results |
+| `status` | `completed` \| `insufficient_information` | `insufficient_information` when photos are unusable |
+| `analysis_mode` | `mock` \| `ai` | Clients must show a clear banner for `mock` and the engine for `ai` |
+| `crop` | enum \| null | The farmer's choice; `null` if not given |
+| `detected_crop` | string \| null | Crop the photos appear to show (AI-read, unconfirmed); `null` for mock or unclear |
 | `summary` | string | Plain-language overview |
 | `urgency` | `low` \| `moderate` \| `high` \| `critical` | |
 | `urgency_reason` | string | |
@@ -75,6 +80,7 @@ Base path: `/api/v1`. All timestamps are ISO 8601 in UTC.
 | `rationale` | string |
 | `priority` | `immediate` \| `within_days` \| `monitor` |
 | `requires_expert_verification` | boolean |
+| `addresses` | string \| null — the symptom or possible cause this step targets |
 
 `DataSource`
 
@@ -109,5 +115,6 @@ Every error uses one envelope:
 | 422 | `validation_error` | Missing or invalid form fields (`details[].field` names the field) |
 | 422 | `images_required` / `too_many_images` / `empty_image` | Photo count or content problems |
 | 500 | `internal_error` | Unexpected server failure |
+| 502 | `analysis_unavailable` | The AI provider failed, timed out or returned invalid output (after one retry). Never silently replaced by mock output |
 
 Submitted values are never echoed in error responses.

@@ -21,11 +21,11 @@ class ReportImage:
 
 @dataclass(frozen=True, slots=True)
 class FarmerReport:
-    crop: Crop
-    description: str = field(repr=False)
-    latitude: float = field(repr=False)
-    longitude: float = field(repr=False)
-    location_label: str | None = field(repr=False)
-    symptom_duration: SymptomDuration | None
     images: tuple[ReportImage, ...]
     received_at: datetime
+    crop: Crop | None = None
+    description: str | None = field(default=None, repr=False)
+    latitude: float | None = field(default=None, repr=False)
+    longitude: float | None = field(default=None, repr=False)
+    location_label: str | None = field(default=None, repr=False)
+    symptom_duration: SymptomDuration | None = None

@@ -4,11 +4,11 @@ import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/utils";
 
-const ROWS = 44;
+const ROWS = 58;
 const POINTS = 140;
-const X_SPAN = 14;
+const X_SPAN = 16;
 const Z_NEAR = 4.5;
-const Z_FAR = -9;
+const Z_FAR = -14;
 const HOTSPOT = { x: 0.9, z: -1.2 };
 
 function height(x: number, z: number, t: number) {
@@ -41,7 +41,10 @@ export function FieldRows({ className }: { className?: string }) {
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-      camera.position.set(0, 3.4, 6.2);
+      let cameraZ = 6.2;
+      let cameraY = 3.4;
+      let lookZ = -1.5;
+      camera.position.set(0, cameraY, cameraZ);
 
       const lineColor = new THREE.Color("#163626");
       const hotColor = new THREE.Color("#cf8336");
@@ -69,7 +72,7 @@ export function FieldRows({ className }: { className?: string }) {
         const material = new THREE.LineBasicMaterial({
           vertexColors: true,
           transparent: true,
-          opacity: 0.9 - depth * 0.65,
+          opacity: 0.9 - depth * 0.78,
         });
         scene.add(new THREE.Line(geometry, material));
         rows.push({ positions, attr, z });
@@ -101,6 +104,11 @@ export function FieldRows({ className }: { className?: string }) {
         renderer.domElement.style.width = "100%";
         renderer.domElement.style.height = "100%";
         camera.aspect = width / h;
+        const portrait = camera.aspect < 1.1;
+        camera.fov = portrait ? 50 : 38;
+        cameraZ = portrait ? 5.6 : 6.2;
+        cameraY = portrait ? 5.4 : 3.4;
+        lookZ = portrait ? -3.6 : -1.5;
         camera.updateProjectionMatrix();
       };
       const resizeObserver = new ResizeObserver(resize);
@@ -124,8 +132,9 @@ export function FieldRows({ className }: { className?: string }) {
         ringMaterial.opacity = 0.9 * (1 - pulse);
 
         camera.position.x += (pointer.x * 0.9 - camera.position.x) * 0.04;
-        camera.position.y += (3.4 - pointer.y * 0.35 - camera.position.y) * 0.04;
-        camera.lookAt(0, 0, -1.5);
+        camera.position.y += (cameraY - pointer.y * 0.35 - camera.position.y) * 0.04;
+        camera.position.z = cameraZ;
+        camera.lookAt(0, 0, lookZ);
         renderer.render(scene, camera);
       };
 

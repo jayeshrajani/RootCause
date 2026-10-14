@@ -1,41 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogIn, LogOut, Plus } from "lucide-react";
 
-import { BracketLink, Logo } from "@/components/brand/logo";
+import { Button, ButtonLink } from "@/components/brand/button";
+import { Logo } from "@/components/brand/logo";
 import { saveProfile, useProfile } from "@/hooks/use-profile";
 
 function ProfileChip() {
   const profile = useProfile();
 
-  if (profile === undefined) return <span className="h-9 w-24" aria-hidden />;
+  if (profile === undefined) return <span className="h-10 w-24" aria-hidden />;
 
   if (!profile || profile.kind === "guest") {
     return (
-      <div className="flex items-center gap-3">
-        <span className="hidden rounded-full bg-forest-900/[0.06] px-3 py-1.5 text-xs text-forest-700 sm:inline">
-          Guest
-        </span>
-        <BracketLink href="/auth">Sign in</BracketLink>
-      </div>
+      <ButtonLink href="/auth" variant="ghost">
+        <LogIn aria-hidden />
+        Sign in
+      </ButtonLink>
     );
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="flex size-9 items-center justify-center rounded-full bg-forest-900 text-sm font-medium text-mint-100 uppercase">
+    <div className="flex items-center gap-1 rounded-full border border-forest-900/10 bg-white/50 py-1 pr-1 pl-1">
+      <span className="flex size-8 items-center justify-center rounded-full bg-forest-900 text-sm font-medium text-mint-100 uppercase">
         {profile.name.charAt(0)}
       </span>
-      <span className="hidden max-w-32 truncate text-sm sm:inline">{profile.name}</span>
-      <button
-        type="button"
+      <span className="hidden max-w-32 truncate px-1.5 text-sm sm:inline">{profile.name}</span>
+      <Button
+        variant="ghost"
         onClick={() => saveProfile(null)}
-        className="flex size-9 items-center justify-center rounded-full text-forest-900/50 transition-colors hover:bg-forest-900/5 hover:text-forest-900"
+        className="size-8 px-0"
         aria-label="Sign out"
       >
-        <LogOut className="size-4" />
-      </button>
+        <LogOut aria-hidden />
+      </Button>
     </div>
   );
 }
@@ -43,13 +42,14 @@ function ProfileChip() {
 export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-forest-900/10 bg-background/75 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-5">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5">
         <Logo />
-        <div className="flex items-center gap-2 sm:gap-6">
-          <BracketLink href="/report" className="hidden sm:inline-flex">
-            New report
-          </BracketLink>
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <ProfileChip />
+          <ButtonLink href="/report" variant="solid" aria-label="New report">
+            <Plus aria-hidden />
+            <span className="hidden sm:inline">New report</span>
+          </ButtonLink>
         </div>
       </div>
     </header>
