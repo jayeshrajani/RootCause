@@ -1,0 +1,117 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-forest-950: #0e2318;
+  --color-forest-900: #163626;
+  --color-forest-800: #1e4532;
+  --color-forest-700: #2a5a42;
+  --color-forest-600: #3b7255;
+  --color-forest-500: #548b6c;
+  --color-mint-50: #f4faf5;
+  --color-mint-100: #e6f4ea;
+  --color-mint-200: #d0ecd9;
+  --color-mint-300: #b6e0c4;
+  --color-mint-400: #94cfa8;
+  --color-clay-400: #e3a35f;
+  --color-clay-500: #cf8336;
+  --color-clay-600: #a8621f;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@theme inline {
+  --font-sans: var(--font-outfit);
+  --font-heading: var(--font-outfit);
+  --font-mono: var(--font-geist-mono);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #f2f7f1;
+  --foreground: #163626;
+  --card: #fbfdfa;
+  --card-foreground: #163626;
+  --popover: #fbfdfa;
+  --popover-foreground: #163626;
+  --primary: #163626;
+  --primary-foreground: #e6f4ea;
+  --secondary: #e6f4ea;
+  --secondary-foreground: #163626;
+  --muted: #e8f0e9;
+  --muted-foreground: #4d6a5a;
+  --accent: #d0ecd9;
+  --accent-foreground: #163626;
+  --destructive: #b83a26;
+  --border: #d3e2d7;
+  --input: #c3d7c9;
+  --ring: #3b7255;
+  --radius: 0.875rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  ::selection {
+    @apply bg-mint-300 text-forest-950;
+  }
+}
+
+@utility grain {
+  position: relative;
+  isolation: isolate;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.09  0 0 0 0 0.21  0 0 0 0 0.15  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+}
+
+@utility label-caps {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
