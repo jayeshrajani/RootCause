@@ -31,6 +31,14 @@ class SymptomDuration(StrEnum):
     NOT_SURE = "not_sure"
 
 
+class ResponseLanguage(StrEnum):
+    ENGLISH = "en"
+    HINDI = "hi"
+    PUNJABI = "pa"
+    SPANISH = "es"
+    FRENCH = "fr"
+
+
 class AnalysisMode(StrEnum):
     MOCK = "mock"
     AI = "ai"
@@ -103,6 +111,18 @@ class PossibleCause(BaseModel):
     contradictory_evidence: list[str]
     confidence: ConfidenceLevel
     uncertainty_note: str
+    analysis_score: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Image and farmer-report relevance score; not a probability.",
+    )
+    weather_score: int | None = Field(
+        default=None, ge=0, le=100, description="Weather relevance score; omitted when unavailable."
+    )
+    evidence_fit_score: int | None = Field(
+        default=None, ge=0, le=100, description="Weighted evidence-fit score; not a probability."
+    )
 
 
 class MissingInformation(BaseModel):
@@ -117,6 +137,18 @@ class RecommendedAction(BaseModel):
     requires_expert_verification: bool
     addresses: str | None = Field(
         default=None, description="The symptom or possible cause this step targets."
+    )
+    analysis_score: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Crop and symptom relevance score; not a probability.",
+    )
+    weather_score: int | None = Field(
+        default=None, ge=0, le=100, description="Weather relevance score; omitted when unavailable."
+    )
+    evidence_fit_score: int | None = Field(
+        default=None, ge=0, le=100, description="Weighted evidence-fit score; not a probability."
     )
 
 
@@ -133,10 +165,14 @@ class TriageResponse(BaseModel):
     report_id: str
     status: TriageStatus
     analysis_mode: AnalysisMode
+    response_language: ResponseLanguage = ResponseLanguage.ENGLISH
     crop: Crop | None = Field(description="Crop the farmer selected, if any.")
     detected_crop: str | None = Field(
         default=None, description="Crop the photos appear to show (AI-read, unconfirmed)."
     )
+    location_label: str | None = None
+    approximate_location: str | None = None
+    weather_summary: str | None = None
     summary: str
     urgency: UrgencyLevel
     urgency_reason: str
@@ -148,3 +184,8 @@ class TriageResponse(BaseModel):
     generated_at: datetime
     data_sources: list[DataSource]
     disclaimer: str
+
+
+class TranslateTriageRequest(BaseModel):
+    result: TriageResponse
+    target_language: ResponseLanguage

@@ -4,13 +4,20 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from app.api.deps import SettingsDep, get_triage_service
+from app.api.deps import SettingsDep, get_triage_service, get_triage_translator
 from app.core.errors import AppError
 from app.models.report import FarmerReport
 from app.schemas.errors import ErrorDetail, ErrorResponse
-from app.schemas.triage import Crop, SymptomDuration, TriageResponse
+from app.schemas.triage import (
+    Crop,
+    ResponseLanguage,
+    SymptomDuration,
+    TranslateTriageRequest,
+    TriageResponse,
+)
 from app.services.image_validation import read_validated_images
 from app.services.triage import TriageService
+from app.services.triage.translate import TriageTranslator
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +28,13 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     415: {"model": ErrorResponse, "description": "Unsupported image type"},
     422: {"model": ErrorResponse, "description": "Invalid or missing fields"},
     502: {"model": ErrorResponse, "description": "Analysis provider unavailable"},
+}
+
+_TRANSLATE_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    413: {"model": ErrorResponse, "description": "Result too long to translate"},
+    422: {"model": ErrorResponse, "description": "Invalid result or language"},
+    502: {"model": ErrorResponse, "description": "Translation provider unavailable"},
+    503: {"model": ErrorResponse, "description": "Translation is not configured"},
 }
 
 
@@ -35,6 +49,7 @@ async def create_triage(
     latitude: Annotated[float | None, Form(ge=-90, le=90, allow_inf_nan=False)] = None,
     longitude: Annotated[float | None, Form(ge=-180, le=180, allow_inf_nan=False)] = None,
     location_label: Annotated[str | None, Form(max_length=120)] = None,
+    response_language: Annotated[ResponseLanguage, Form()] = ResponseLanguage.ENGLISH,
 ) -> TriageResponse:
     if (latitude is None) != (longitude is None):
         missing = "longitude" if longitude is None else "latitude"
@@ -59,6 +74,7 @@ async def create_triage(
         longitude=longitude,
         location_label=(location_label or "").strip() or None,
         symptom_duration=symptom_duration,
+        response_language=response_language,
     )
     result = await service.assess(report)
     logger.info(
@@ -70,3 +86,17 @@ async def create_triage(
         result.status.value,
     )
     return result
+
+
+@router.post("/triage/translate", responses=_TRANSLATE_ERROR_RESPONSES)
+async def translate_triage(
+    request: TranslateTriageRequest,
+    translator: Annotated[TriageTranslator | None, Depends(get_triage_translator)],
+) -> TriageResponse:
+    if translator is None:
+        raise AppError(
+            503,
+            "translation_unavailable",
+            "Translation needs the AI analysis service, which isn't available right now.",
+        )
+    return await translator.translate(request.result, request.target_language)

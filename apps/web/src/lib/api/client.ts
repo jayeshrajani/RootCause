@@ -1,5 +1,7 @@
 import type { ReportFormValues } from "@/lib/schemas/report";
 import type { ApiErrorBody, TriageResponse } from "@/types/triage";
+import type { LocationOption } from "@/types/location";
+import type { Language } from "@/lib/i18n";
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
@@ -30,7 +32,7 @@ function isApiErrorBody(value: unknown): value is ApiErrorBody {
   );
 }
 
-function toFormData(values: ReportFormValues): FormData {
+function toFormData(values: ReportFormValues, language: Language): FormData {
   const form = new FormData();
   for (const image of values.images) form.append("images", image, image.name);
   const optional = {
@@ -40,17 +42,21 @@ function toFormData(values: ReportFormValues): FormData {
     latitude: values.latitude,
     longitude: values.longitude,
     location_label: values.location_label,
+    response_language: language,
   };
   for (const [key, value] of Object.entries(optional)) if (value) form.append(key, value);
   return form;
 }
 
-export async function submitTriageReport(values: ReportFormValues): Promise<TriageResponse> {
+export async function submitTriageReport(
+  values: ReportFormValues,
+  language: Language = "en",
+): Promise<TriageResponse> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/triage`, {
       method: "POST",
-      body: toFormData(values),
+      body: toFormData(values, language),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
@@ -82,4 +88,41 @@ export async function submitTriageReport(values: ReportFormValues): Promise<Tria
   }
 
   return body as TriageResponse;
+}
+
+export async function translateTriage(
+  result: TriageResponse,
+  language: Language,
+  signal: AbortSignal,
+): Promise<TriageResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/triage/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ result, target_language: language }),
+    signal,
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok || typeof body !== "object" || body === null || !("report_id" in body)) {
+    const message = isApiErrorBody(body) ? body.error.message : "Translation is unavailable.";
+    throw new ApiError("server", message, [], response.status);
+  }
+  return body as TriageResponse;
+}
+
+export async function searchLocations(query: string, signal: AbortSignal): Promise<LocationOption[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/locations/search?q=${encodeURIComponent(query)}`,
+    { signal },
+  );
+  if (!response.ok) throw new Error("Location search unavailable");
+  const result: unknown = await response.json();
+  if (
+    typeof result !== "object" ||
+    result === null ||
+    !("locations" in result) ||
+    !Array.isArray(result.locations)
+  ) {
+    throw new Error("Unexpected location search response");
+  }
+  return result.locations as LocationOption[];
 }

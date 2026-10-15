@@ -5,8 +5,8 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 const ROWS = 58;
-const POINTS = 140;
-const X_SPAN = 16;
+const POINTS = 200;
+const X_SPAN = 26;
 const Z_NEAR = 4.5;
 const Z_FAR = -14;
 const HOTSPOT = { x: 0.9, z: -1.2 };
@@ -72,7 +72,7 @@ export function FieldRows({ className }: { className?: string }) {
         const material = new THREE.LineBasicMaterial({
           vertexColors: true,
           transparent: true,
-          opacity: 0.9 - depth * 0.78,
+          opacity: Math.max(0, 0.9 - depth),
         });
         scene.add(new THREE.Line(geometry, material));
         rows.push({ positions, attr, z });
@@ -105,10 +105,11 @@ export function FieldRows({ className }: { className?: string }) {
         renderer.domElement.style.height = "100%";
         camera.aspect = width / h;
         const portrait = camera.aspect < 1.1;
-        camera.fov = portrait ? 50 : 38;
+        const wide = camera.aspect > 2.4;
+        camera.fov = portrait ? 50 : wide ? 30 : 38;
         cameraZ = portrait ? 5.6 : 6.2;
         cameraY = portrait ? 5.4 : 3.4;
-        lookZ = portrait ? -3.6 : -1.5;
+        lookZ = portrait ? -3.6 : wide ? -2.2 : -1.5;
         camera.updateProjectionMatrix();
       };
       const resizeObserver = new ResizeObserver(resize);

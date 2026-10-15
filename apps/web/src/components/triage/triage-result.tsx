@@ -3,13 +3,16 @@ import { Camera } from "lucide-react";
 import { PillLink } from "@/components/brand/pill";
 import { Reveal } from "@/components/motion/reveal";
 import { ActionList } from "@/components/triage/action-list";
+import { CropCheck } from "@/components/triage/crop-check";
 import { PossibleCauses } from "@/components/triage/possible-causes";
 import { QuickChecks } from "@/components/triage/quick-checks";
 import { ResultTabs } from "@/components/triage/result-tabs";
 import { SummaryCard } from "@/components/triage/summary-card";
 import type { TriageResponse } from "@/types/triage";
+import { useI18n } from "@/lib/i18n";
 
 export function TriageResult({ result }: { result: TriageResponse }) {
+  const { t } = useI18n();
   return (
     <div className="mx-auto w-full max-w-6xl px-5 pt-6 pb-12 sm:pt-10">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-10">
@@ -18,13 +21,13 @@ export function TriageResult({ result }: { result: TriageResponse }) {
         </div>
 
         <Reveal delay={0.15} className="min-w-0">
+          <CropCheck key={result.report_id} result={result} />
           {result.status === "insufficient_information" ? (
             <div className="mb-3 flex items-start gap-3 rounded-2xl border border-clay-400/40 bg-clay-400/10 px-4 py-3 text-sm">
               <Camera className="mt-0.5 size-4 shrink-0 text-clay-600" aria-hidden />
               <p>
-                <span className="font-medium text-clay-600">Not enough to go on.</span>{" "}
-                The photos weren&apos;t clear enough for a confident triage. Try the quick checks,
-                then send a new report.
+                <span className="font-medium text-clay-600">{t("insufficientTitle")}</span>{" "}
+                {t("insufficientBody")}
               </p>
             </div>
           ) : null}
@@ -33,7 +36,7 @@ export function TriageResult({ result }: { result: TriageResponse }) {
             tabs={[
               {
                 id: "causes",
-                label: "Causes",
+                label: t("causes"),
                 count: result.possible_causes.length,
                 content: (
                   <div className="space-y-7">
@@ -44,7 +47,7 @@ export function TriageResult({ result }: { result: TriageResponse }) {
               },
               {
                 id: "next",
-                label: "Do next",
+                label: t("doNext"),
                 count: result.recommended_actions.length,
                 content: <ActionList actions={result.recommended_actions} />,
               },
@@ -52,8 +55,8 @@ export function TriageResult({ result }: { result: TriageResponse }) {
           />
 
           <div className="mt-8 flex flex-col items-start gap-3 border-t border-forest-900/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-medium">Seen something new in the field?</p>
-            <PillLink href="/report">New report</PillLink>
+            <p className="font-medium">{t("seenSomethingNew")}</p>
+            <PillLink href="/report">{t("newReport")}</PillLink>
           </div>
         </Reveal>
       </div>

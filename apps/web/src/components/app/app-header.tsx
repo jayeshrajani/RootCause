@@ -4,19 +4,22 @@ import Link from "next/link";
 import { LogIn, LogOut, Plus } from "lucide-react";
 
 import { Button, ButtonLink } from "@/components/brand/button";
+import { LanguageSwitcher } from "@/components/app/language-switcher";
 import { Logo } from "@/components/brand/logo";
 import { saveProfile, useProfile } from "@/hooks/use-profile";
+import { useI18n } from "@/lib/i18n";
 
 function ProfileChip() {
   const profile = useProfile();
+  const { t } = useI18n();
 
   if (profile === undefined) return <span className="h-10 w-24" aria-hidden />;
 
   if (!profile || profile.kind === "guest") {
     return (
-      <ButtonLink href="/auth" variant="ghost">
+      <ButtonLink href="/auth" variant="ghost" aria-label={t("signIn")}>
         <LogIn aria-hidden />
-        Sign in
+        <span className="hidden sm:inline">{t("signIn")}</span>
       </ButtonLink>
     );
   }
@@ -31,7 +34,7 @@ function ProfileChip() {
         variant="ghost"
         onClick={() => saveProfile(null)}
         className="size-8 px-0"
-        aria-label="Sign out"
+        aria-label={t("signOut")}
       >
         <LogOut aria-hidden />
       </Button>
@@ -40,15 +43,17 @@ function ProfileChip() {
 }
 
 export function AppHeader() {
+  const { t } = useI18n();
   return (
     <header className="sticky top-0 z-40 border-b border-forest-900/10 bg-background/75 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5">
-        <Logo />
+        <Logo compact />
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <LanguageSwitcher />
           <ProfileChip />
-          <ButtonLink href="/report" variant="solid" aria-label="New report">
+          <ButtonLink href="/report" variant="solid" aria-label={t("newReport")} className="size-10 px-0 sm:size-auto sm:px-4">
             <Plus aria-hidden />
-            <span className="hidden sm:inline">New report</span>
+            <span className="hidden sm:inline">{t("newReport")}</span>
           </ButtonLink>
         </div>
       </div>

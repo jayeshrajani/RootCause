@@ -1,21 +1,17 @@
 "use client";
 
-import { useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { AnimatePresence, motion } from "motion/react";
 import { Camera, ImagePlus, Maximize, SunMedium, Leaf, X } from "lucide-react";
 
+import { CameraCapture } from "@/components/farmer/camera-capture";
 import { FieldMessage } from "@/components/forms/text-field";
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES } from "@/lib/constants";
 import { objectUrlFor, releaseObjectUrl } from "@/lib/object-urls";
 import type { ReportFormInput } from "@/lib/schemas/report";
 import { cn } from "@/lib/utils";
-
-const TIPS = [
-  { icon: SunMedium, text: "Daylight, no flash" },
-  { icon: Maximize, text: "Fill the frame" },
-  { icon: Leaf, text: "Add a healthy leaf" },
-];
+import { useI18n } from "@/lib/i18n";
 
 function formatSize(bytes: number) {
   return bytes < 1024 * 1024
@@ -23,7 +19,7 @@ function formatSize(bytes: number) {
     : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function PhotoGrid({ files, onRemove }: { files: File[]; onRemove: (index: number) => void }) {
+function PhotoGrid({ files, onRemove, removeLabel }: { files: File[]; onRemove: (index: number) => void; removeLabel: string }) {
   return (
     <motion.ul layout className="grid grid-cols-3 gap-2.5 sm:gap-3">
       <AnimatePresence mode="popLayout">
@@ -38,7 +34,7 @@ function PhotoGrid({ files, onRemove }: { files: File[]; onRemove: (index: numbe
             className="group relative aspect-square overflow-hidden rounded-2xl bg-mint-200"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
-            <img src={objectUrlFor(file)} alt={`Photo ${index + 1}`} className="size-full object-cover" />
+            <img src={objectUrlFor(file)} alt={`${removeLabel} ${index + 1}`} className="size-full object-cover" />
             <span className="absolute bottom-2 left-2 rounded-full bg-forest-950/60 px-2 py-0.5 text-[11px] text-white backdrop-blur">
               {formatSize(file.size)}
             </span>
@@ -46,7 +42,7 @@ function PhotoGrid({ files, onRemove }: { files: File[]; onRemove: (index: numbe
               type="button"
               onClick={() => onRemove(index)}
               className="absolute top-2 right-2 flex size-8 items-center justify-center rounded-full bg-white/90 text-forest-900 shadow-sm transition-transform hover:scale-105"
-              aria-label={`Remove photo ${index + 1}`}
+              aria-label={`${removeLabel} ${index + 1}`}
             >
               <X className="size-4" />
             </button>
@@ -58,9 +54,20 @@ function PhotoGrid({ files, onRemove }: { files: File[]; onRemove: (index: numbe
 }
 
 export function PhotoStep() {
+  const { t } = useI18n();
   const { control, formState } = useFormContext<ReportFormInput>();
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const error = formState.errors.images?.message;
+
+  const openCamera = () => {
+    // Phones open their own camera app via `capture`; desktops ignore it and show a file picker.
+    const touch = window.matchMedia("(pointer: coarse)").matches;
+    if (touch || !navigator.mediaDevices?.getUserMedia) cameraInput.current?.click();
+    else setCameraOpen(true);
+  };
 
   return (
     <Controller
@@ -80,8 +87,16 @@ export function PhotoStep() {
 
         return (
           <div className="space-y-4">
+            <AnimatePresence>
+              {cameraOpen ? (
+                <CameraCapture
+                  onCapture={(file) => add([file])}
+                  onClose={() => setCameraOpen(false)}
+                />
+              ) : null}
+            </AnimatePresence>
             {remaining > 0 ? (
-              <label
+              <div
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragging(true);
@@ -89,8 +104,7 @@ export function PhotoStep() {
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
                 className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed px-6 text-center transition-colors duration-300 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-mint-400",
-                  files.length ? "py-8" : "py-14",
+                  "flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors duration-300",
                   dragging
                     ? "border-forest-700 bg-mint-200"
                     : error
@@ -99,11 +113,33 @@ export function PhotoStep() {
                 )}
               >
                 <input
+                  ref={cameraInput}
+                  type="file"
+                  accept={ACCEPTED_IMAGE_TYPES.join(",")}
+                  capture="environment"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-label={t("takePhotoTitle")}
+                  aria-describedby={error ? "images-hint images-error" : "images-hint"}
+                  onChange={(event) => {
+                    add(Array.from(event.target.files ?? []));
+                    event.target.value = "";
+                  }}
+                  onBlur={field.onBlur}
+                />
+                <input
+                  ref={(element) => {
+                    fileInput.current = element;
+                    field.ref(element);
+                  }}
                   type="file"
                   accept={ACCEPTED_IMAGE_TYPES.join(",")}
                   multiple
                   className="sr-only"
-                  aria-describedby="images-hint"
+                  tabIndex={-1}
+                  aria-label={t("chooseFiles")}
+                  aria-invalid={!!error || undefined}
+                  aria-describedby={error ? "images-hint images-error" : "images-hint"}
                   onChange={(event) => {
                     add(Array.from(event.target.files ?? []));
                     event.target.value = "";
@@ -116,19 +152,37 @@ export function PhotoStep() {
                 >
                   {files.length ? <ImagePlus className="size-6" /> : <Camera className="size-6" />}
                 </motion.span>
-                <span className="text-lg font-medium">
-                  {files.length ? `Add another photo` : "Take or choose photos"}
+                  <span className="text-lg font-medium">
+                    {files.length ? t("addAnotherPhoto") : t("addPhotos")}
                 </span>
+                <div className="grid w-full grid-cols-1 gap-2 min-[400px]:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={openCamera}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-forest-900 px-4 py-2 text-sm font-medium text-mint-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-700"
+                  >
+                    <Camera className="size-4 shrink-0" aria-hidden />
+                    {t("takePhoto")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInput.current?.click()}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-forest-900/20 bg-white px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest-700"
+                  >
+                    <ImagePlus className="size-4 shrink-0" aria-hidden />
+                    {t("chooseFiles")}
+                  </button>
+                </div>
                 <span id="images-hint" className="text-sm text-muted-foreground">
-                  {remaining} of {MAX_IMAGES} left · JPEG, PNG or WebP · up to{" "}
-                  {MAX_IMAGE_BYTES / (1024 * 1024)} MB each
+                  {remaining} / {MAX_IMAGES} {t("photoCount")} · {t("imageFormat")} · {MAX_IMAGE_BYTES / (1024 * 1024)} {t("maxPerPhoto")}
                 </span>
-              </label>
+              </div>
             ) : null}
 
             {files.length ? (
               <PhotoGrid
                 files={files}
+                removeLabel={t("removePhoto")}
                 onRemove={(index) => {
                   const removed = files[index];
                   field.onChange(files.filter((_, i) => i !== index));
@@ -140,7 +194,11 @@ export function PhotoStep() {
             <FieldMessage id="images-error" message={error} />
 
             <ul className="flex flex-wrap gap-2 pt-2">
-              {TIPS.map(({ icon: Icon, text }) => (
+              {[
+                { icon: SunMedium, text: t("daylight") },
+                { icon: Maximize, text: t("fillFrame") },
+                { icon: Leaf, text: t("includeHealthy") },
+              ].map(({ icon: Icon, text }) => (
                 <li
                   key={text}
                   className="flex items-center gap-1.5 rounded-full bg-mint-100 px-3 py-1.5 text-xs text-forest-700"

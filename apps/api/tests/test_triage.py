@@ -19,6 +19,8 @@ def test_valid_report_returns_labelled_mock_assessment(client: TestClient) -> No
     assert result.analysis_mode == "mock"
     assert result.report_id.startswith("mock_")
     assert result.crop == "tomato"
+    assert result.location_label == "Near Pune"
+    assert result.approximate_location == "18.52° N, 73.86° E"
     assert result.requires_expert_review is True
     assert "MOCK" in result.disclaimer
     assert result.possible_causes and all(c.confidence == "low" for c in result.possible_causes)

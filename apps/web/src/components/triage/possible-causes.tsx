@@ -5,8 +5,10 @@ import { AnimatePresence, motion } from "motion/react";
 import { ChevronDown, CircleHelp, Minus, Plus } from "lucide-react";
 
 import { CONFIDENCE_DISPLAY } from "@/components/triage/display";
+import { EvidenceFit } from "@/components/triage/evidence-fit";
 import { cn } from "@/lib/utils";
 import type { PossibleCause } from "@/types/triage";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export function ConfidenceMeter({
   level,
@@ -57,8 +59,14 @@ function EvidenceColumn({ title, items, empty, positive }: { title: string; item
 }
 
 function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: boolean }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
   const confidence = CONFIDENCE_DISPLAY[cause.confidence];
+  const confidenceKey: Record<PossibleCause["confidence"], TranslationKey> = {
+    low: "confidenceLow",
+    medium: "confidenceMedium",
+    high: "confidenceHigh",
+  };
   const panelId = `cause-${cause.name.replace(/\W+/g, "-").toLowerCase()}`;
 
   return (
@@ -72,7 +80,10 @@ function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: 
       >
         <span className="flex-1 space-y-1">
           <span className="block leading-snug font-medium sm:text-lg">{cause.name}</span>
-          <ConfidenceMeter level={confidence.level} label={confidence.label} />
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <ConfidenceMeter level={confidence.level} label={t(confidenceKey[cause.confidence])} />
+            <EvidenceFit score={cause.evidence_fit_score} weatherScore={cause.weather_score} />
+          </span>
         </span>
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
@@ -94,11 +105,11 @@ function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: 
             <div className="space-y-4 px-4 pb-5 sm:px-5">
               <p className="text-[15px] leading-relaxed text-forest-900/85">{cause.explanation}</p>
               <div className="grid gap-5 rounded-2xl bg-mint-50 p-4 sm:grid-cols-2">
-                <EvidenceColumn title="Supports" items={cause.supporting_evidence} empty="Nothing yet." positive />
+                <EvidenceColumn title={t("supports")} items={cause.supporting_evidence} empty={t("nothingYet")} positive />
                 <EvidenceColumn
-                  title="Argues against"
+                  title={t("arguesAgainst")}
                   items={cause.contradictory_evidence}
-                  empty="Nothing checked yet."
+                  empty={t("nothingChecked")}
                   positive={false}
                 />
               </div>

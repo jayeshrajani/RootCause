@@ -20,12 +20,14 @@ from app.schemas.triage import (
     MissingInformation,
     PossibleCause,
     RecommendedAction,
+    ResponseLanguage,
     SourceKind,
     TriageResponse,
     TriageStatus,
     UrgencyLevel,
 )
 from app.services.triage.common import (
+    approximate_location,
     crop_name,
     duration_label,
     farmer_report_evidence,
@@ -69,7 +71,10 @@ class MockTriageService:
             report_id=self._id_factory(),
             status=TriageStatus.COMPLETED,
             analysis_mode=AnalysisMode.MOCK,
+            response_language=ResponseLanguage.ENGLISH,
             crop=report.crop,
+            location_label=report.location_label,
+            approximate_location=approximate_location(report),
             summary=(
                 f"[MOCK] Placeholder assessment for a {crop} report with {photo_count} "
                 "photo(s). The cause has not been determined; the hypotheses below are "

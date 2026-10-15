@@ -14,6 +14,7 @@ import { TextField } from "@/components/forms/text-field";
 import { Spinner } from "@/components/ui/spinner";
 import { saveProfile } from "@/hooks/use-profile";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 type Mode = "signin" | "signup";
 
@@ -31,23 +32,11 @@ const schema = z
 
 type AuthValues = z.infer<typeof schema>;
 
-const COPY: Record<Mode, { title: string; subtitle: string; submit: string }> = {
-  signin: {
-    title: "Welcome back",
-    subtitle: "Sign in to keep your crop reports together.",
-    submit: "Sign in",
-  },
-  signup: {
-    title: "Create your account",
-    subtitle: "One account for every field you look after.",
-    submit: "Create account",
-  },
-};
-
 const NEXT_ROUTE = "/report";
 
 export function SkipButton() {
   const router = useRouter();
+  const { t } = useI18n();
   return (
     <Button
       variant="outline"
@@ -56,14 +45,25 @@ export function SkipButton() {
         router.push(NEXT_ROUTE);
       }}
     >
-      Skip for now
+      {t("skipForNow")}
       <ArrowRight className="transition-transform group-hover:translate-x-0.5" aria-hidden />
     </Button>
   );
 }
 
+export function AuthAsideCopy() {
+  const { t } = useI18n();
+  return (
+    <div className="relative max-w-sm space-y-3">
+      <p className="label-caps text-mint-300/70">{t("fieldNotes")}</p>
+      <p className="text-2xl leading-snug font-light tracking-tight">{t("authAside")}</p>
+    </div>
+  );
+}
+
 export function AuthForm() {
   const router = useRouter();
+  const { t } = useI18n();
   const [showPassword, setShowPassword] = useState(false);
   const {
     register,
@@ -77,7 +77,9 @@ export function AuthForm() {
     defaultValues: { mode: "signin", name: "", email: "", password: "" },
   });
   const mode = useWatch({ control, name: "mode" });
-  const copy = COPY[mode];
+  const copy = mode === "signin"
+    ? { title: t("welcomeBack"), subtitle: t("signInSubtitle"), submit: t("signIn") }
+    : { title: t("createAccount"), subtitle: t("signUpSubtitle"), submit: t("createAccountAction") };
 
   const switchMode = (next: Mode) => {
     setValue("mode", next);
@@ -122,7 +124,7 @@ export function AuthForm() {
                   transition={{ type: "spring", stiffness: 420, damping: 36 }}
                 />
               ) : null}
-              <span className="relative">{m === "signin" ? "Sign in" : "Sign up"}</span>
+              <span className="relative">{m === "signin" ? t("signIn") : t("signUp")}</span>
             </button>
           ))}
         </div>
@@ -153,7 +155,7 @@ export function AuthForm() {
                 className="overflow-hidden"
               >
                 <TextField
-                  label="Your name"
+                  label={t("yourName")}
                   autoComplete="name"
                   placeholder="e.g. Asha Patil"
                   error={errors.name?.message}
@@ -165,7 +167,7 @@ export function AuthForm() {
 
           <motion.div layout>
             <TextField
-              label="Email"
+              label={t("email")}
               type="email"
               inputMode="email"
               autoComplete="email"
@@ -177,17 +179,17 @@ export function AuthForm() {
 
           <motion.div layout>
             <TextField
-              label="Password"
+              label={t("password")}
               type={showPassword ? "text" : "password"}
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              placeholder="At least 8 characters"
+              placeholder={t("passwordHint")}
               error={errors.password?.message}
               trailing={
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   className="flex size-10 items-center justify-center rounded-xl text-forest-900/50 transition-colors hover:bg-mint-100 hover:text-forest-900"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? t("hidePassword") : t("showPassword")}
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
@@ -213,7 +215,7 @@ export function AuthForm() {
 
       <div className="my-8 flex items-center gap-4 text-xs text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
-        or
+        {t("or")}
         <span className="h-px flex-1 bg-border" />
       </div>
 
@@ -222,12 +224,11 @@ export function AuthForm() {
         onClick={skip}
         className="h-12 w-full rounded-full border border-forest-900/15 text-[15px] font-medium transition-colors hover:border-forest-900/40 hover:bg-white/60"
       >
-        Continue as guest
+        {t("continueGuest")}
       </button>
 
       <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-        Accounts are in preview and not yet connected to a server. Only your name and email are
-        kept on this device; passwords are never stored.
+        {t("accountPreview")}
       </p>
     </div>
   );

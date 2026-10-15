@@ -11,9 +11,9 @@ type LocationState =
   | { status: "error"; message: string };
 
 const ERROR_MESSAGES: Record<number, string> = {
-  1: "Location permission was denied. Enter the coordinates by hand, or allow location access.",
-  2: "Your location could not be determined. Enter the coordinates by hand.",
-  3: "Finding your location took too long. Try again or enter the coordinates by hand.",
+  1: "Location permission was denied. Enter a village or district instead, or allow location access.",
+  2: "Your location could not be determined. Enter a village or district instead.",
+  3: "Finding your location took too long. Try again or enter a village or district instead.",
 };
 
 export function useApproximateLocation(

@@ -8,7 +8,9 @@ class TriageService(Protocol):
     """Produces a triage assessment for a validated farmer report.
 
     Implementations: MockTriageService (Milestone 0). A Gemini-backed orchestrator that
-    also consumes weather/satellite/knowledge adapters will implement this later.
+        Implementations: MockTriageService and AiTriageService. AI triage may consume recent
+        weather estimates when coordinates are available; satellite and knowledge adapters remain
+        unintegrated.
     """
 
     async def assess(self, report: FarmerReport) -> TriageResponse: ...

@@ -5,19 +5,17 @@ import { AnimatePresence, motion } from "motion/react";
 
 import { LogoMark } from "@/components/brand/logo";
 import { objectUrlFor } from "@/lib/object-urls";
+import { useI18n } from "@/lib/i18n";
 
-const STAGES = [
-  "Looking closely at your photos",
-  "Separating what's visible from what's likely",
-  "Judging how urgent it looks",
-  "Writing safe next steps",
-];
+const STAGE_COUNT = 4;
 
 export function AnalysingOverlay({ photo }: { photo?: File }) {
+  const { t } = useI18n();
+  const stages = [t("analysing"), t("observed"), t("triage"), t("nextSteps")];
   const [stage, setStage] = useState(0);
 
   useEffect(() => {
-    const id = window.setInterval(() => setStage((s) => Math.min(s + 1, STAGES.length - 1)), 1600);
+    const id = window.setInterval(() => setStage((s) => Math.min(s + 1, STAGE_COUNT - 1)), 1600);
     return () => window.clearInterval(id);
   }, []);
 
@@ -58,10 +56,10 @@ export function AnalysingOverlay({ photo }: { photo?: File }) {
             transition={{ duration: 0.35 }}
             className="text-xl font-medium tracking-tight"
           >
-            {STAGES[stage]}…
+            {stages[stage]}…
           </motion.p>
         </AnimatePresence>
-        <p className="text-sm text-mint-200/60">This usually takes a few seconds.</p>
+        <p className="text-sm text-mint-200/60">{t("analysing")}…</p>
       </div>
     </motion.div>
   );

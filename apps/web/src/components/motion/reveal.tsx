@@ -30,6 +30,9 @@ export function Reveal({ delay = 0, y = 18, onView = false, children, ...props }
 
 interface RevealTextProps {
   text: string;
+  /** Words appended after `text`, revealed with a highlighter sweep styled by `accentClassName`. */
+  accent?: string;
+  accentClassName?: string;
   as?: "h1" | "h2" | "p";
   className?: string;
   delay?: number;
@@ -39,31 +42,57 @@ interface RevealTextProps {
 /** Word-by-word masked rise. Screen readers get the plain sentence. */
 export function RevealText({
   text,
+  accent,
+  accentClassName,
   as: Tag = "h1",
   className,
   delay = 0,
   stagger = 0.06,
 }: RevealTextProps) {
-  const words = text.split(" ");
+  const lead = text.split(" ");
+  const words = accent ? [...lead, ...accent.split(" ")] : lead;
+  const sweepDelay = delay + words.length * stagger + 0.45;
   return (
-    <Tag className={className} aria-label={text}>
-      {words.map((word, i) => (
-        <span
-          key={`${word}-${i}`}
-          aria-hidden
-          className="inline-block overflow-hidden pb-[0.08em] align-bottom"
-        >
-          <motion.span
-            className="inline-block"
-            initial={{ y: "105%" }}
-            animate={{ y: "0%" }}
-            transition={{ duration: 1, ease: EASE, delay: delay + i * stagger }}
-          >
+    <Tag className={className} aria-label={accent ? `${text} ${accent}` : text}>
+      {words.map((word, i) => {
+        const content = (
+          <>
             {word}
             {i < words.length - 1 ? "\u00a0" : null}
-          </motion.span>
-        </span>
-      ))}
+          </>
+        );
+        return (
+          <span
+            key={`${word}-${i}`}
+            aria-hidden
+            className="-mt-[0.25em] -mb-[0.12em] inline-block overflow-hidden pt-[0.25em] pb-[0.2em] align-bottom"
+          >
+            <motion.span
+              className="inline-block"
+              initial={{ y: "160%" }}
+              animate={{ y: "0%" }}
+              transition={{ duration: 1, ease: EASE, delay: delay + i * stagger }}
+            >
+              {i < lead.length ? (
+                content
+              ) : (
+                <motion.span
+                  className={accentClassName}
+                  initial={{ backgroundSize: "0% 100%" }}
+                  animate={{ backgroundSize: "100% 100%" }}
+                  transition={{
+                    duration: 0.45,
+                    ease: "easeOut",
+                    delay: sweepDelay + (i - lead.length) * 0.3,
+                  }}
+                >
+                  {content}
+                </motion.span>
+              )}
+            </motion.span>
+          </span>
+        );
+      })}
     </Tag>
   );
 }

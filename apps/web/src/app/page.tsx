@@ -1,44 +1,25 @@
+"use client";
+
 import { BotanicalPattern, LeafIllustration } from "@/components/brand/botanical";
 import { Logo } from "@/components/brand/logo";
 import { PillLink } from "@/components/brand/pill";
 import { LandingHero } from "@/components/landing/landing-hero";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/reveal";
-
-const PRINCIPLES = [
-  {
-    title: "Observed",
-    body: "What your photos and words actually show, kept apart from any guess.",
-  },
-  {
-    title: "Suspected",
-    body: "Possible causes with their confidence, and the evidence that argues against them.",
-  },
-  {
-    title: "Missing",
-    body: "What would make the picture clearer, so you know exactly what to check.",
-  },
-  {
-    title: "Next steps",
-    body: "Safe actions ranked by urgency, flagged when an expert should confirm.",
-  },
-];
-
-const STEPS = [
-  {
-    title: "Photograph",
-    body: "Up to three close-ups of the affected leaves, stems or fruit.",
-  },
-  {
-    title: "Describe",
-    body: "Tap the symptoms you see, add a few words, and roughly where the field is.",
-  },
-  {
-    title: "Triage",
-    body: "See how urgent it looks, what it might be, and what to do next.",
-  },
-];
+import { useI18n } from "@/lib/i18n";
 
 export default function HomePage() {
+  const { t } = useI18n();
+  const principles = [
+    { title: t("observed"), body: t("observedBody") },
+    { title: t("suspected"), body: t("suspectedBody") },
+    { title: t("missing"), body: t("missingBody") },
+    { title: t("nextSteps"), body: t("nextStepsBody") },
+  ];
+  const steps = [
+    { title: t("photograph"), body: t("photographBody") },
+    { title: t("describe"), body: t("describeBody") },
+    { title: t("triage"), body: t("triageBody") },
+  ];
   return (
     <main className="flex-1">
       <div className="relative bg-forest-900 p-2.5 sm:p-4">
@@ -49,15 +30,13 @@ export default function HomePage() {
       <section id="principles" className="mx-auto max-w-6xl scroll-mt-6 px-5 py-24 sm:px-8 sm:py-32">
         <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr]">
           <Reveal onView>
-            <p className="label-caps text-forest-600">The RootCause method</p>
+            <p className="label-caps text-forest-600">{t("method")}</p>
             <h2 className="mt-4 text-4xl leading-[1.02] font-medium tracking-[-0.03em] sm:text-5xl">
-              A triage,
-              <br />
-              not a verdict.
+              {t("triageNotVerdict")}
             </h2>
           </Reveal>
           <Stagger className="grid gap-px overflow-hidden rounded-3xl border bg-border sm:grid-cols-2">
-            {PRINCIPLES.map((item, index) => (
+            {principles.map((item, index) => (
               <StaggerItem key={item.title} className="bg-card p-6 sm:p-8">
                 <p className="font-mono text-xs text-forest-500">0{index + 1}</p>
                 <h3 className="mt-6 text-xl font-medium">{item.title}</h3>
@@ -72,10 +51,10 @@ export default function HomePage() {
         <div className="mx-auto grid max-w-6xl gap-12 px-5 py-24 sm:px-8 sm:py-28 lg:grid-cols-[1.4fr_1fr] lg:items-center">
           <div>
             <Reveal onView>
-              <p className="label-caps text-forest-600">Two minutes, three steps</p>
+              <p className="label-caps text-forest-600">{t("threeSteps")}</p>
             </Reveal>
             <Stagger className="mt-8 divide-y divide-forest-900/15 border-y border-forest-900/15">
-              {STEPS.map((step, index) => (
+              {steps.map((step, index) => (
                 <StaggerItem
                   key={step.title}
                   className="grid grid-cols-[4.5rem_1fr] items-baseline gap-4 py-7 sm:grid-cols-[7rem_1fr]"
@@ -102,14 +81,13 @@ export default function HomePage() {
           <BotanicalPattern className="text-mint-300/[0.07]" />
           <Reveal onView className="relative mx-auto flex max-w-3xl flex-col items-center gap-8 text-center">
             <h2 className="text-4xl leading-[1.02] font-medium tracking-[-0.03em] sm:text-6xl">
-              Something wrong in the field?
+              {t("fieldProblem")}
             </h2>
             <p className="max-w-md text-mint-200/80">
-              Send a report now. It is free, works on any phone, and never claims more certainty
-              than the evidence allows.
+              {t("landingCtaBody")}
             </p>
             <PillLink href="/auth" tone="light">
-              Start a crop report
+              {t("startReport")}
             </PillLink>
           </Reveal>
         </div>
@@ -118,10 +96,9 @@ export default function HomePage() {
       <footer className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-10 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
         <Logo className="text-forest-900" />
         <p className="max-w-md">
-          Triage guidance, not a confirmed diagnosis. Check with a local agricultural expert before
-          treating crops.
+          {t("footerDisclaimer")}
         </p>
-        <p>Google AI Builder Cup 2026</p>
+        <p>Leaf by leaf. Field by field.</p>
       </footer>
     </main>
   );

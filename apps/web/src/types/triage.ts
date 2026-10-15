@@ -27,6 +27,7 @@ export const SYMPTOM_DURATIONS = [
 export type SymptomDuration = (typeof SYMPTOM_DURATIONS)[number];
 
 export type AnalysisMode = "mock" | "ai";
+export type ResponseLanguage = "en" | "hi" | "pa" | "es" | "fr";
 export type TriageStatus = "completed" | "insufficient_information";
 export type UrgencyLevel = "low" | "moderate" | "high" | "critical";
 export type ConfidenceLevel = "low" | "medium" | "high";
@@ -60,6 +61,9 @@ export interface PossibleCause {
   contradictory_evidence: string[];
   confidence: ConfidenceLevel;
   uncertainty_note: string;
+  analysis_score: number | null;
+  weather_score: number | null;
+  evidence_fit_score: number | null;
 }
 
 export interface MissingInformation {
@@ -73,6 +77,9 @@ export interface RecommendedAction {
   priority: ActionPriority;
   requires_expert_verification: boolean;
   addresses: string | null;
+  analysis_score: number | null;
+  weather_score: number | null;
+  evidence_fit_score: number | null;
 }
 
 export interface DataSource {
@@ -88,8 +95,12 @@ export interface TriageResponse {
   report_id: string;
   status: TriageStatus;
   analysis_mode: AnalysisMode;
+  response_language: ResponseLanguage;
   crop: Crop | null;
   detected_crop: string | null;
+  location_label: string | null;
+  approximate_location: string | null;
+  weather_summary: string | null;
   summary: string;
   urgency: UrgencyLevel;
   urgency_reason: string;

@@ -5,8 +5,9 @@ import { ArrowLeft } from "lucide-react";
 import { AnimatedLeaf } from "@/components/brand/animated-leaf";
 import { BotanicalPattern } from "@/components/brand/botanical";
 import { ButtonLink } from "@/components/brand/button";
+import { LanguageSwitcher } from "@/components/app/language-switcher";
 import { Logo } from "@/components/brand/logo";
-import { AuthForm, SkipButton } from "@/components/auth/auth-form";
+import { AuthAsideCopy, AuthForm, SkipButton } from "@/components/auth/auth-form";
 import { Reveal } from "@/components/motion/reveal";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -20,12 +21,7 @@ export default function AuthPage() {
         <div className="relative flex flex-1 items-center justify-center">
           <AnimatedLeaf className="h-[52vh] max-h-[520px] text-mint-300/80" />
         </div>
-        <Reveal delay={0.6} className="relative max-w-sm space-y-3">
-          <p className="label-caps text-mint-300/70">Field notes</p>
-          <p className="text-2xl leading-snug font-light tracking-tight">
-            Built for the field, not the lab. Clear next steps, honest about what we don&apos;t know.
-          </p>
-        </Reveal>
+        <AuthAsideCopy />
       </aside>
 
       <section className="grain flex flex-col bg-mint-50 px-5 py-5 sm:px-10">
@@ -35,7 +31,10 @@ export default function AuthPage() {
             <ArrowLeft aria-hidden />
             Home
           </ButtonLink>
-          <SkipButton />
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            <SkipButton />
+          </div>
         </div>
         <div className="flex flex-1 items-center justify-center py-8">
           <Reveal className="flex w-full justify-center">

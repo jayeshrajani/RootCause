@@ -21,14 +21,22 @@ export function LogoMark({ className }: { className?: string }) {
   );
 }
 
-export function Logo({ className, href = "/" }: { className?: string; href?: string }) {
+export function Logo({
+  className,
+  href = "/",
+  compact = false,
+}: {
+  className?: string;
+  href?: string;
+  compact?: boolean;
+}) {
   return (
     <Link
       href={href}
       className={cn("inline-flex items-center gap-1.5 text-[15px] font-semibold tracking-[0.08em] uppercase", className)}
     >
       <LogoMark />
-      RootCause
+      <span className={cn(compact && "hidden sm:inline")}>RootCause</span>
     </Link>
   );
 }

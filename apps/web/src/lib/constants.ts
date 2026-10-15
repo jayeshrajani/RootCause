@@ -16,6 +16,22 @@ export const CROP_LABELS: Record<Crop, string> = {
   other: "Something else",
 };
 
+export const CROP_LOCAL_NAMES: Record<Crop, string | null> = {
+  rice: "Dhan / Chawal",
+  wheat: "Gehun",
+  maize: "Makka",
+  cotton: "Kapas",
+  sugarcane: "Ganna",
+  soybean: "Soyabean",
+  groundnut: "Moongphali",
+  chickpea: "Chana",
+  tomato: "Tamatar",
+  potato: "Aloo",
+  onion: "Pyaz",
+  chilli: "Mirchi",
+  other: null,
+};
+
 export const CROP_SCIENTIFIC: Record<Crop, string> = {
   rice: "Oryza sativa",
   wheat: "Triticum aestivum",

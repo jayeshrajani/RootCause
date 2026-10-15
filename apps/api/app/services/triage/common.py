@@ -27,6 +27,89 @@ def duration_label(report: FarmerReport) -> str:
     return DURATION_LABELS[report.symptom_duration] if report.symptom_duration else "not given"
 
 
+def approximate_location(report: FarmerReport) -> str | None:
+    if report.latitude is None or report.longitude is None:
+        return None
+    latitude_direction = "N" if report.latitude >= 0 else "S"
+    longitude_direction = "E" if report.longitude >= 0 else "W"
+    return (
+        f"{abs(report.latitude):.2f}° {latitude_direction}, "
+        f"{abs(report.longitude):.2f}° {longitude_direction}"
+    )
+
+
+def recent_weather_summary(report: FarmerReport) -> str | None:
+    if report.weather is None or not report.weather.days:
+        return None
+    days = report.weather.days
+    temperatures_min = [day.temperature_min_c for day in days if day.temperature_min_c is not None]
+    temperatures_max = [day.temperature_max_c for day in days if day.temperature_max_c is not None]
+    rain_values = [day.precipitation_mm for day in days if day.precipitation_mm is not None]
+    humidity_values = [
+        day.relative_humidity_percent for day in days if day.relative_humidity_percent is not None
+    ]
+    language = report.response_language.value
+    labels = {
+        "en": (
+            "Previous",
+            "completed days",
+            "temperature",
+            "rain",
+            "mean humidity",
+            "Open-Meteo regional estimates, not field measurements.",
+        ),
+        "hi": (
+            "पिछले",
+            "पूरे दिन",
+            "तापमान",
+            "बारिश",
+            "औसत नमी",
+            "Open-Meteo के क्षेत्रीय अनुमान, खेत पर माप नहीं।",
+        ),
+        "pa": (
+            "ਪਿਛਲੇ",
+            "ਪੂਰੇ ਦਿਨ",
+            "ਤਾਪਮਾਨ",
+            "ਮੀਂਹ",
+            "ਔਸਤ ਨਮੀ",
+            "Open-Meteo ਦੇ ਖੇਤਰੀ ਅੰਦਾਜ਼ੇ, ਖੇਤ ਦੀ ਮਾਪ ਨਹੀਂ।",
+        ),
+        "es": (
+            "Últimos",
+            "días completos",
+            "temperatura",
+            "lluvia",
+            "humedad media",
+            "Estimaciones regionales de Open-Meteo, no mediciones del campo.",
+        ),
+        "fr": (
+            "Sur les",
+            "derniers jours complets",
+            "température",
+            "pluie",
+            "humidité moyenne",
+            "Estimations régionales Open-Meteo, pas des mesures du champ.",
+        ),
+    }
+    previous, completed, temperature_label, rain_label, humidity_label, caveat = labels.get(
+        language, labels["en"]
+    )
+    details = []
+    if temperatures_min and temperatures_max:
+        temperature_range = f"{min(temperatures_min):.1f}–{max(temperatures_max):.1f}°C"
+        details.append(f"{temperature_label} {temperature_range}")
+    if rain_values:
+        details.append(f"{rain_label} {sum(rain_values):.1f} mm")
+    if humidity_values:
+        details.append(f"{humidity_label} {sum(humidity_values) / len(humidity_values):.0f}%")
+    if not details:
+        return None
+    return (
+        f"{previous} {len(days)} {completed} ({days[0].date} – {days[-1].date}): "
+        f"{'; '.join(details)}. {caveat}"
+    )
+
+
 def farmer_report_evidence(report: FarmerReport) -> Evidence:
     parts = [f"Crop: {crop_name(report) or 'not specified'}", f"duration: {duration_label(report)}"]
     if report.description:
@@ -44,14 +127,8 @@ def farmer_report_evidence(report: FarmerReport) -> Evidence:
     )
 
 
-def not_integrated_evidence() -> list[Evidence]:
-    return [
-        Evidence(
-            id="ev_weather",
-            source=SourceKind.WEATHER,
-            availability=EvidenceAvailability.NOT_INTEGRATED,
-            observation="No weather data was retrieved. Do not assume conditions were normal.",
-        ),
+def not_integrated_evidence(*, include_weather: bool = True) -> list[Evidence]:
+    evidence = [
         Evidence(
             id="ev_satellite",
             source=SourceKind.SATELLITE,
@@ -65,6 +142,60 @@ def not_integrated_evidence() -> list[Evidence]:
             observation="No agricultural guidance was retrieved; no sources are cited.",
         ),
     ]
+    if include_weather:
+        evidence.insert(
+            0,
+            Evidence(
+                id="ev_weather",
+                source=SourceKind.WEATHER,
+                availability=EvidenceAvailability.NOT_INTEGRATED,
+                observation="No weather data was retrieved. Do not assume conditions were normal.",
+            ),
+        )
+    return evidence
+
+
+def weather_evidence(report: FarmerReport) -> Evidence:
+    if report.weather is None:
+        return Evidence(
+            id="ev_weather",
+            source=SourceKind.WEATHER,
+            availability=EvidenceAvailability.UNAVAILABLE,
+            observation=report.weather_unavailable_reason or "No weather data was retrieved.",
+        )
+    daily_summary = "; ".join(
+        f"{day.date}: min {day.temperature_min_c if day.temperature_min_c is not None else 'n/a'}"
+        f" C, max {day.temperature_max_c if day.temperature_max_c is not None else 'n/a'} C, "
+        f"rain {day.precipitation_mm if day.precipitation_mm is not None else 'n/a'} mm, "
+        f"mean relative humidity "
+        f"{day.relative_humidity_percent if day.relative_humidity_percent is not None else 'n/a'}%"
+        for day in report.weather.days
+    )
+    return Evidence(
+        id="ev_weather",
+        source=SourceKind.WEATHER,
+        availability=EvidenceAvailability.AVAILABLE,
+        observation=(
+            "Open-Meteo model-based estimates for the previous completed local days "
+            f"(not measurements from the field): {daily_summary}."
+        ),
+    )
+
+
+def weather_source(report: FarmerReport) -> DataSource:
+    used = report.weather is not None
+    return DataSource(
+        id="src_weather",
+        name="Open-Meteo recent weather",
+        kind=SourceKind.WEATHER,
+        status=DataSourceStatus.USED if used else DataSourceStatus.UNAVAILABLE,
+        description=(
+            "Recent model-based daily temperature, precipitation and humidity estimates."
+            if used
+            else report.weather_unavailable_reason or "No weather data was retrieved."
+        ),
+        retrieved_at=report.weather.retrieved_at if report.weather else None,
+    )
 
 
 def farmer_report_source() -> DataSource:
@@ -77,15 +208,8 @@ def farmer_report_source() -> DataSource:
     )
 
 
-def not_integrated_sources() -> list[DataSource]:
-    return [
-        DataSource(
-            id="src_weather",
-            name="Weather (Open-Meteo)",
-            kind=SourceKind.WEATHER,
-            status=DataSourceStatus.NOT_INTEGRATED,
-            description="Planned for Milestone 2.",
-        ),
+def not_integrated_sources(*, include_weather: bool = True) -> list[DataSource]:
+    sources = [
         DataSource(
             id="src_satellite",
             name="Satellite vegetation indices",
@@ -101,3 +225,15 @@ def not_integrated_sources() -> list[DataSource]:
             description="Planned for Milestone 4.",
         ),
     ]
+    if include_weather:
+        sources.insert(
+            0,
+            DataSource(
+                id="src_weather",
+                name="Weather (Open-Meteo)",
+                kind=SourceKind.WEATHER,
+                status=DataSourceStatus.NOT_INTEGRATED,
+                description="Weather lookup is not enabled for this analysis mode.",
+            ),
+        )
+    return sources

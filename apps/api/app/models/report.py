@@ -6,7 +6,8 @@ Sensitive fields are excluded from repr so they cannot leak into logs by acciden
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from app.schemas.triage import Crop, SymptomDuration
+from app.models.weather import RecentWeather
+from app.schemas.triage import Crop, ResponseLanguage, SymptomDuration
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,3 +30,6 @@ class FarmerReport:
     longitude: float | None = field(default=None, repr=False)
     location_label: str | None = field(default=None, repr=False)
     symptom_duration: SymptomDuration | None = None
+    response_language: ResponseLanguage = ResponseLanguage.ENGLISH
+    weather: RecentWeather | None = None
+    weather_unavailable_reason: str | None = None

@@ -6,9 +6,11 @@ import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { MissingInformation } from "@/types/triage";
+import { useI18n } from "@/lib/i18n";
 
 /** Field checks that help tell the possible causes apart. Ticks are local only. */
 export function QuickChecks({ items }: { items: MissingInformation[] }) {
+  const { t } = useI18n();
   const [done, setDone] = useState<Set<number>>(new Set());
 
   if (!items.length) return null;
@@ -23,7 +25,7 @@ export function QuickChecks({ items }: { items: MissingInformation[] }) {
 
   return (
     <div className="space-y-2.5">
-      <p className="label-caps text-forest-600">Quick checks to tell them apart</p>
+      <p className="label-caps text-forest-600">{t("quickChecks")}</p>
       <ul className="space-y-2">
         {items.map((item, i) => {
           const checked = done.has(i);
