@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 ReferenceStatus = Literal["disabled", "loading", "ready", "failed"]
 SUPPORTED_CROPS = tuple(crop.value for crop in SupportedCrop)
 TOP_K = 10
-MIN_SIMILARITY = 0.45
+# Held-out field photos score >= 0.45 against their best reference; blank or noise images <= 0.21.
+MIN_SIMILARITY = 0.35
 
 
 class ReferenceUnavailableError(Exception):

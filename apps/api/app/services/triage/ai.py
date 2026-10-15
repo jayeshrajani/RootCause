@@ -247,8 +247,8 @@ _CONFIDENCE_ORDER = [ConfidenceLevel.LOW, ConfidenceLevel.MEDIUM, ConfidenceLeve
 _MAX_CAUSES = 4
 _MAX_ITEMS = 5
 WEATHER_SCORE_WEIGHT = 10
-# Reference votes are a bounded input, scaled by measured retrieval accuracy per crop.
-REFERENCE_SCORE_WEIGHTS: Mapping[str, int] = {"rice": 20, "potato": 20, "tomato": 10}
+# Tuned on held-out field photos with scripts/evaluate_hybrid.py (see docs/retrieval.md).
+REFERENCE_SCORE_WEIGHTS: Mapping[str, int] = {"rice": 30, "potato": 20, "tomato": 10}
 _ACTION_PRIORITY_ORDER = {
     ActionPriority.IMMEDIATE: 0,
     ActionPriority.WITHIN_DAYS: 1,

@@ -56,12 +56,15 @@ Each AI-generated cause and recommended action includes `analysis_score`, `weath
 `evidence_fit_score`, each from 0 to 100. Causes may also include `reference_score`. The backend
 calculates the evidence-fit score as a weighted average of the available components:
 
-| Components available | Weights (analysis / reference / weather) |
-| --- | --- |
-| Analysis only | 100 |
-| Analysis + weather | 90 / – / 10 |
-| Analysis + references | 80 / 20 / – (tomato 90 / 10 / –) |
-| All three | 70 / 20 / 10 (tomato 80 / 10 / 10) |
+| Components available | Rice | Potato | Tomato |
+| --- | --- | --- | --- |
+| Analysis only | 100 | 100 | 100 |
+| Analysis + weather | 90 / – / 10 | 90 / – / 10 | 90 / – / 10 |
+| Analysis + references | 70 / 30 / – | 80 / 20 / – | 90 / 10 / – |
+| All three | 60 / 30 / 10 | 70 / 20 / 10 | 80 / 10 / 10 |
+
+Weights are analysis / references / weather; other crops never use references. They were tuned
+on held-out field photos (see [retrieval.md](retrieval.md#hybrid-scoring)).
 
 `reference_score` is the share of the 10 most visually similar labelled reference photos
 (DINOv2 + FAISS, rice, tomato and potato only) whose label the model matched to that cause. It is

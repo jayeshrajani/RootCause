@@ -75,6 +75,25 @@ Farmer uploads are field photos, so the field column is the relevant one. DINOv2
 on background: tomato lab photos mostly retrieve the lab-only classes (spider mites, target spot).
 Tomato top-1 is about 0.4, so references support reasoning; they do not identify the disease.
 
+### Hybrid scoring
+
+Triage asks the model to tag each possible cause with one of the crop's reference labels. The
+share of the 10 closest references carrying that label becomes the cause's `reference_score`,
+blended into evidence fit with a per-crop weight (rice 30, potato 20, tomato 10; analysis keeps
+the rest, weather keeps 10). A best match below 0.35 cosine similarity is ignored: held-out field
+photos score at least 0.45, blank or noise images at most 0.21.
+
+`scripts/evaluate_hybrid.py --per-crop 10` (10 held-out field photos per crop, one model call
+each, healthy excluded) gave top-cause agreement with the dataset label of:
+
+| Crop | AI only | Ref weight 10 | 20 | 30 | References alone |
+| --- | --- | --- | --- | --- | --- |
+| Rice (10) | 0.50 | 0.60 | 0.80 | 0.90 | 0.90 |
+| Tomato (9) | 0.44 | 0.44 | 0.44 | 0.44 | 0.22 |
+| Potato (10) | 0.50 | 0.50 | 0.50 | 0.50 | 0.50 |
+
+Samples are small; re-run before changing weights.
+
 ## Contract
 
 `retrieve(crop_id, images, *, top_k=5) -> RetrievalResult`
@@ -173,7 +192,12 @@ python scripts/inspect_retrieval.py --data-dir <DATA_DIR> --index-version v1   #
 ```
 
 Then set `ROOTCAUSE_DATA_DIR=<DATA_DIR>` and `ROOTCAUSE_RETRIEVAL_INDEX_VERSION=v1` in the repo-root
-`.env`. Use a data directory outside Git and synced folders.
+`.env` (or `apps/api/.env`). Use a data directory outside Git and synced folders. The API loads the
+library in the background at startup; `GET /api/v1/health` reports `reference_photos: ready`.
+
+On macOS the torch and faiss-cpu wheels each bundle OpenMP. Importing `app.services.retrieval`
+sets `KMP_DUPLICATE_LIB_OK=TRUE` and `OMP_NUM_THREADS=1` (unless already set) so both can load in
+one process; without them the process aborts or segfaults.
 
 The manifests are committed and the model weights are checksum-pinned, so every machine indexes the
 same images with the same model. Embedding values can differ in the last decimal places between

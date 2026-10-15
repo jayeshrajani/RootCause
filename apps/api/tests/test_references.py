@@ -188,8 +188,8 @@ async def test_reference_votes_can_reorder_causes_for_a_selected_crop() -> None:
     assert provider.calls == [("rice", 1)]
     assert [c.name for c in result.possible_causes] == ["Blast", "Brown spot"]
     assert [c.reference_score for c in result.possible_causes] == [80, 20]
-    assert [c.evidence_fit_score for c in result.possible_causes] == [74, 68]
-    assert result.reference_weight == 20
+    assert [c.evidence_fit_score for c in result.possible_causes] == [74, 62]
+    assert result.reference_weight == 30
     assert "- rice: bacterial_blight, blast, brown_spot, tungro" in prompt_of(sent)
     evidence = next(e for e in result.evidence if e.source == "reference_photos")
     assert evidence.availability == "available"
