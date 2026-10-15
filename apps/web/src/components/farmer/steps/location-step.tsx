@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useApproximateLocation } from "@/hooks/use-approximate-location";
 import { searchLocations } from "@/lib/api/client";
 import type { ReportFormInput } from "@/lib/schemas/report";
+import { scrollToStep } from "@/lib/step-scroll";
 import type { LocationOption } from "@/types/location";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -110,6 +111,14 @@ export function LocationStep({ location }: { location: FieldLocation }) {
   const [matches, setMatches] = useState<LocationOption[]>([]);
   const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [showMatches, setShowMatches] = useState(false);
+  // Only a farmer-initiated fix moves the page; the automatic request after picking a crop must not.
+  const advanceOnFix = useRef(false);
+
+  useEffect(() => {
+    if (!hasCoords || !advanceOnFix.current) return;
+    advanceOnFix.current = false;
+    scrollToStep("step-3");
+  }, [hasCoords]);
 
   useEffect(() => {
     const normalizedQuery = query.trim();
@@ -145,20 +154,25 @@ export function LocationStep({ location }: { location: FieldLocation }) {
     setShowMatches(false);
     setMatches([]);
     location.cancel();
+    advanceOnFix.current = false;
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    scrollToStep("step-3");
   };
 
   return (
-    <div className="space-y-4">
+    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-6">
+      <div className="min-w-0 space-y-2">
       <motion.button
         type="button"
         onClick={() => {
           setQuery("");
+          advanceOnFix.current = true;
           location.request();
         }}
         disabled={state.status === "locating"}
         whileTap={{ scale: 0.98 }}
         className={cn(
-          "flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-colors duration-300",
+          "flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-colors duration-300",
           hasCoords
             ? "border-forest-900 bg-forest-900 text-mint-100"
             : "border-forest-900/15 bg-white/70 hover:border-forest-900/40 hover:bg-white",
@@ -205,13 +219,15 @@ export function LocationStep({ location }: { location: FieldLocation }) {
           </motion.p>
         ) : null}
       </AnimatePresence>
-
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        {t("enterAnotherLocation")}
-        <span className="h-px flex-1 bg-border" />
       </div>
 
+      <div className="flex items-center gap-3 text-xs text-muted-foreground md:flex-col md:gap-2 md:py-1" aria-hidden>
+        <span className="h-px flex-1 bg-border md:w-px" />
+        {t("or")}
+        <span className="h-px flex-1 bg-border md:w-px" />
+      </div>
+
+      <div className="min-w-0 space-y-2">
       <TextField
         label={t("villageDistrict")}
         placeholder={t("searchPlace")}
@@ -276,6 +292,7 @@ export function LocationStep({ location }: { location: FieldLocation }) {
         </div>
       ) : null}
       <FieldMessage id="location-error" message={errors.latitude?.message ?? errors.longitude?.message} />
+      </div>
     </div>
   );
 }

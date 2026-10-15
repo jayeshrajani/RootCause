@@ -51,7 +51,7 @@ export function AppHeader() {
         <div className="flex items-center gap-1.5 sm:gap-2">
           <LanguageSwitcher />
           <ProfileChip />
-          <ButtonLink href="/report" variant="solid" aria-label={t("newReport")} className="size-10 px-0 sm:size-auto sm:px-4">
+          <ButtonLink href="/report" variant="solid" aria-label={t("newReport")} className="size-10 px-0 sm:w-auto sm:px-4">
             <Plus aria-hidden />
             <span className="hidden sm:inline">{t("newReport")}</span>
           </ButtonLink>
