@@ -1,0 +1,199 @@
+{
+  "potato": {
+    "valid_candidates_by_source": {
+      "plantdoc": 221,
+      "plantvillage": 118
+    },
+    "rejected": {
+      "plantdoc: unsupported format (MPO)": 1
+    },
+    "duplicate_copies_dropped": 2,
+    "near_duplicates_skipped": 5,
+    "conflicting_label_groups": 7,
+    "conditions_without_reference": [],
+    "conditions_without_field_reference": [
+      "healthy"
+    ],
+    "counts": {
+      "early_blight": {
+        "evaluation": {
+          "field": 18,
+          "lab": 7
+        },
+        "reference": {
+          "field": 90,
+          "lab": 10
+        }
+      },
+      "healthy": {
+        "evaluation": {
+          "lab": 8
+        },
+        "reference": {
+          "lab": 29
+        }
+      },
+      "late_blight": {
+        "evaluation": {
+          "field": 18,
+          "lab": 7
+        },
+        "reference": {
+          "field": 75,
+          "lab": 25
+        }
+      }
+    }
+  },
+  "rice": {
+    "valid_candidates_by_source": {
+      "mendeley_rice": 5932
+    },
+    "rejected": {},
+    "duplicate_copies_dropped": 5571,
+    "near_duplicates_skipped": 61,
+    "conflicting_label_groups": 0,
+    "conditions_without_reference": [],
+    "conditions_without_field_reference": [],
+    "counts": {
+      "bacterial_blight": {
+        "evaluation": {
+          "field": 15
+        },
+        "reference": {
+          "field": 59
+        }
+      },
+      "blast": {
+        "evaluation": {
+          "field": 16
+        },
+        "reference": {
+          "field": 59
+        }
+      },
+      "brown_spot": {
+        "evaluation": {
+          "field": 19
+        },
+        "reference": {
+          "field": 62
+        }
+      },
+      "tungro": {
+        "evaluation": {
+          "field": 22
+        },
+        "reference": {
+          "field": 54
+        }
+      }
+    }
+  },
+  "tomato": {
+    "valid_candidates_by_source": {
+      "plantdoc": 746,
+      "plantvillage": 400
+    },
+    "rejected": {},
+    "duplicate_copies_dropped": 17,
+    "near_duplicates_skipped": 2,
+    "conflicting_label_groups": 7,
+    "conditions_without_reference": [],
+    "conditions_without_field_reference": [
+      "target_spot"
+    ],
+    "counts": {
+      "bacterial_spot": {
+        "evaluation": {
+          "field": 18,
+          "lab": 7
+        },
+        "reference": {
+          "field": 30
+        }
+      },
+      "early_blight": {
+        "evaluation": {
+          "field": 17,
+          "lab": 8
+        },
+        "reference": {
+          "field": 30
+        }
+      },
+      "healthy": {
+        "evaluation": {
+          "field": 13,
+          "lab": 8
+        },
+        "reference": {
+          "field": 30
+        }
+      },
+      "late_blight": {
+        "evaluation": {
+          "field": 18,
+          "lab": 7
+        },
+        "reference": {
+          "field": 30
+        }
+      },
+      "leaf_mold": {
+        "evaluation": {
+          "field": 17,
+          "lab": 8
+        },
+        "reference": {
+          "field": 30
+        }
+      },
+      "mosaic_virus": {
+        "evaluation": {
+          "field": 11,
+          "lab": 8
+        },
+        "reference": {
+          "field": 30
+        }
+      },
+      "septoria_leaf_spot": {
+        "evaluation": {
+          "field": 20,
+          "lab": 5
+        },
+        "reference": {
+          "field": 30
+        }
+      },
+      "spider_mites": {
+        "evaluation": {
+          "lab": 8
+        },
+        "reference": {
+          "field": 2,
+          "lab": 28
+        }
+      },
+      "target_spot": {
+        "evaluation": {
+          "lab": 8
+        },
+        "reference": {
+          "lab": 30
+        }
+      },
+      "yellow_leaf_curl_virus": {
+        "evaluation": {
+          "field": 14,
+          "lab": 8
+        },
+        "reference": {
+          "field": 30
+        }
+      }
+    }
+  },
+  "unknown_source_labels": {}
+}

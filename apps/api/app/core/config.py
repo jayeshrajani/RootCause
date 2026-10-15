@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     cerebras_model: str = "qwen-3.8-27b"
     cerebras_reasoning_effort: Literal["low", "medium", "high"] = "low"
 
+    # Raw reference datasets, caches and indexes. Keep outside Git and synced folders.
+    data_dir: Path | None = None
+    # Local DINOv2 model directory; defaults to DATA_DIR/models/dinov2-small/<revision>.
+    embedding_model_dir: Path | None = None
+    # FAISS index root (holds one folder per version) and the version to serve.
+    retrieval_index_dir: Path | None = None
+    retrieval_index_version: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._-]{1,64}$")
+
     @property
     def use_cerebras(self) -> bool:
         if self.analysis_provider == "cerebras":

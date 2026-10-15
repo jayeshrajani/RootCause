@@ -55,6 +55,8 @@ display name/email (never a password) in `localStorage`.
 | `app/models/report.py` | Internal `FarmerReport` / `ReportImage`; sensitive fields hidden from `repr` |
 | `app/services/image_validation.py` | Count, size and magic-byte type checks |
 | `app/services/triage/` | `TriageService` protocol and `MockTriageService` |
+| `app/services/retrieval/` | Crop reference retrieval: dataset registry, DINOv2 embeddings, per-crop FAISS indexes ([retrieval.md](retrieval.md)) |
+| `scripts/` | Offline tooling: dataset preparation, model fetch, index build, evaluation |
 | `app/integrations/` | Home for external adapters (empty in Milestone 0) |
 
 ### Extension points

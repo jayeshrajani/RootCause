@@ -8,6 +8,10 @@
 .env.*
 !.env.example
 
+# Reference dataset artifacts; only manifests are versioned
+apps/api/data/*
+!apps/api/data/manifests/
+
 # Node / Next.js
 node_modules/
 .next/
