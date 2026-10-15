@@ -1,0 +1,2 @@
+# Index builds checksum these manifests; keep identical bytes on every platform.
+apps/api/data/manifests/** text eol=lf
