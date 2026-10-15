@@ -86,6 +86,7 @@ npm run lint && npm run typecheck && npm run build
 
 - [Architecture](docs/architecture.md)
 - [API contract](docs/api-contract.md)
+- [Reference retrieval (DINOv2 + FAISS)](docs/retrieval.md) and [reference datasets](docs/datasets.md)
 - [Roadmap](docs/roadmap.md)
 - [Decision records](docs/decisions/)
 - [Contributing](CONTRIBUTING.md)
