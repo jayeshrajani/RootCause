@@ -1,4 +1,4 @@
-import { Camera, CloudSun, Cpu, FileText, Library, Satellite, type LucideIcon } from "lucide-react";
+import { Camera, CloudSun, Cpu, FileText, Images, Library, Satellite, type LucideIcon } from "lucide-react";
 
 import type {
   ActionPriority,
@@ -44,6 +44,7 @@ export const SOURCE_DISPLAY: Record<SourceKind, { label: string; icon: LucideIco
   satellite: { label: "Satellite", icon: Satellite },
   knowledge_base: { label: "Agricultural guidance", icon: Library },
   analysis_engine: { label: "Analysis engine", icon: Cpu },
+  reference_photos: { label: "Reference photos", icon: Images },
 };
 
 export const AVAILABILITY_DISPLAY: Record<EvidenceAvailability, { label: string; className: string }> = {

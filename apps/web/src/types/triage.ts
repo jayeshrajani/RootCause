@@ -37,7 +37,8 @@ export type SourceKind =
   | "weather"
   | "satellite"
   | "knowledge_base"
-  | "analysis_engine";
+  | "analysis_engine"
+  | "reference_photos";
 export type EvidenceAvailability = "available" | "unavailable" | "not_integrated";
 export type DataSourceStatus =
   | "used"
@@ -63,6 +64,7 @@ export interface PossibleCause {
   uncertainty_note: string;
   analysis_score: number | null;
   weather_score: number | null;
+  reference_score?: number | null;
   evidence_fit_score: number | null;
 }
 
@@ -101,6 +103,7 @@ export interface TriageResponse {
   location_label: string | null;
   approximate_location: string | null;
   weather_summary: string | null;
+  reference_weight?: number | null;
   summary: string;
   urgency: UrgencyLevel;
   urgency_reason: string;

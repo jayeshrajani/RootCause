@@ -58,7 +58,15 @@ function EvidenceColumn({ title, items, empty, positive }: { title: string; item
   );
 }
 
-function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: boolean }) {
+function CauseItem({
+  cause,
+  defaultOpen,
+  referenceWeight,
+}: {
+  cause: PossibleCause;
+  defaultOpen: boolean;
+  referenceWeight: number | null;
+}) {
   const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
   const confidence = CONFIDENCE_DISPLAY[cause.confidence];
@@ -82,7 +90,12 @@ function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: 
           <span className="block leading-snug font-medium sm:text-lg">{cause.name}</span>
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <ConfidenceMeter level={confidence.level} label={t(confidenceKey[cause.confidence])} />
-            <EvidenceFit score={cause.evidence_fit_score} weatherScore={cause.weather_score} />
+            <EvidenceFit
+              score={cause.evidence_fit_score}
+              weatherScore={cause.weather_score}
+              referenceScore={cause.reference_score ?? null}
+              referenceWeight={referenceWeight}
+            />
           </span>
         </span>
         <motion.span
@@ -125,11 +138,17 @@ function CauseItem({ cause, defaultOpen }: { cause: PossibleCause; defaultOpen: 
   );
 }
 
-export function PossibleCauses({ causes }: { causes: PossibleCause[] }) {
+export function PossibleCauses({
+  causes,
+  referenceWeight = null,
+}: {
+  causes: PossibleCause[];
+  referenceWeight?: number | null;
+}) {
   return (
     <ul className="space-y-2.5">
       {causes.map((cause, i) => (
-        <CauseItem key={cause.name} cause={cause} defaultOpen={i === 0} />
+        <CauseItem key={cause.name} cause={cause} defaultOpen={i === 0} referenceWeight={referenceWeight} />
       ))}
     </ul>
   );

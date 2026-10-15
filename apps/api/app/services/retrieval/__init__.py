@@ -3,6 +3,7 @@
 Public API for the triage orchestrator; see docs/retrieval.md.
 """
 
+from app.services.retrieval import _openmp  # noqa: F401  (must run before torch/faiss load)
 from app.services.retrieval.errors import (
     EmbeddingError,
     IndexCompatibilityError,

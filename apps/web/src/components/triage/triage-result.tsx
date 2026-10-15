@@ -40,7 +40,7 @@ export function TriageResult({ result }: { result: TriageResponse }) {
                 count: result.possible_causes.length,
                 content: (
                   <div className="space-y-7">
-                    <PossibleCauses causes={result.possible_causes} />
+                    <PossibleCauses causes={result.possible_causes} referenceWeight={result.reference_weight ?? null} />
                     <QuickChecks items={result.missing_information} />
                   </div>
                 ),

@@ -69,6 +69,7 @@ class SourceKind(StrEnum):
     SATELLITE = "satellite"
     KNOWLEDGE_BASE = "knowledge_base"
     ANALYSIS_ENGINE = "analysis_engine"
+    REFERENCE_PHOTOS = "reference_photos"
 
 
 class EvidenceAvailability(StrEnum):
@@ -119,6 +120,13 @@ class PossibleCause(BaseModel):
     )
     weather_score: int | None = Field(
         default=None, ge=0, le=100, description="Weather relevance score; omitted when unavailable."
+    )
+    reference_score: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Share of the most similar labelled reference photos showing this cause; "
+        "not a probability. Omitted when no reference label matches the cause.",
     )
     evidence_fit_score: int | None = Field(
         default=None, ge=0, le=100, description="Weighted evidence-fit score; not a probability."
@@ -173,6 +181,12 @@ class TriageResponse(BaseModel):
     location_label: str | None = None
     approximate_location: str | None = None
     weather_summary: str | None = None
+    reference_weight: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Percentage weight of reference_score in evidence_fit_score, when compared.",
+    )
     summary: str
     urgency: UrgencyLevel
     urgency_reason: str

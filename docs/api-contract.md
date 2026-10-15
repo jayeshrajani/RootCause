@@ -17,10 +17,12 @@ still be submitted without selecting a match, but weather lookup may not resolve
 ## `GET /health`
 
 ```json
-{ "status": "ok", "service": "rootcause-api", "version": "0.1.0", "analysis_mode": "ai", "model": "qwen-3.8-27b" }
+{ "status": "ok", "service": "rootcause-api", "version": "0.1.0", "analysis_mode": "ai", "model": "qwen-3.8-27b", "reference_photos": "ready" }
 ```
 
 `analysis_mode` is `ai` when an analysis provider is configured (currently Cerebras), else `mock`.
+`reference_photos` is `disabled` (no `ROOTCAUSE_RETRIEVAL_INDEX_VERSION`), `loading` (model and
+index load in the background for about 30 s after startup), `ready` or `failed`.
 
 ## `POST /triage`
 
@@ -51,12 +53,23 @@ for shared coordinates (rounded to two decimals), plus `weather_summary` when re
 are available. No reverse geocoding is performed.
 
 Each AI-generated cause and recommended action includes `analysis_score`, `weather_score`, and
-`evidence_fit_score`, each from 0 to 100. The backend calculates the evidence-fit score as
-`90% analysis_score + 10% weather_score`; the weather component is `null` and omitted from the
-calculation when weather is unavailable. Causes are ranked by evidence fit. Actions retain their
-urgency tier and are ranked by evidence fit within that tier. These heuristic fit scores are not
-probabilities or calibrated disease likelihoods; image/report analysis is the dominant signal
-until a reference-embedding model is available.
+`evidence_fit_score`, each from 0 to 100. Causes may also include `reference_score`. The backend
+calculates the evidence-fit score as a weighted average of the available components:
+
+| Components available | Weights (analysis / reference / weather) |
+| --- | --- |
+| Analysis only | 100 |
+| Analysis + weather | 90 / – / 10 |
+| Analysis + references | 80 / 20 / – (tomato 90 / 10 / –) |
+| All three | 70 / 20 / 10 (tomato 80 / 10 / 10) |
+
+`reference_score` is the share of the 10 most visually similar labelled reference photos
+(DINOv2 + FAISS, rice, tomato and potato only) whose label the model matched to that cause. It is
+`null` when reference photos were not compared or no reference label matches the cause; the
+response's `reference_weight` gives the weight used. Reference comparison is best-effort and never
+blocks a triage. Causes are ranked by evidence fit. Actions retain their urgency tier and are
+ranked by evidence fit within that tier (actions do not use references). These heuristic fit
+scores are not probabilities or calibrated disease likelihoods.
 
 ### 200 response: `TriageResponse`
 
@@ -71,6 +84,7 @@ until a reference-embedding model is available.
 | `location_label` | string \| null | Farmer-entered place name, if provided |
 | `approximate_location` | string \| null | Coordinates rounded to two decimals and formatted for display |
 | `weather_summary` | string \| null | Recent Open-Meteo estimate summary, when available |
+| `reference_weight` | integer \| null | Weight (%) of `reference_score` in evidence fit, when any cause has one |
 | `summary` | string | Plain-language overview |
 | `urgency` | `low` \| `moderate` \| `high` \| `critical` | |
 | `urgency_reason` | string | |
@@ -95,6 +109,7 @@ until a reference-embedding model is available.
 | `uncertainty_note` | string |
 | `analysis_score` | integer \| null | 0–100 image/report relevance; not a probability |
 | `weather_score` | integer \| null | 0–100 weather relevance; `null` when unavailable |
+| `reference_score` | integer \| null | 0–100 share of similar labelled reference photos showing this cause; not a probability |
 | `evidence_fit_score` | integer \| null | Weighted fit score; not a probability |
 
 `Evidence`
@@ -102,7 +117,7 @@ until a reference-embedding model is available.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string | Stable within a response |
-| `source` | `farmer_report` \| `photo` \| `weather` \| `satellite` \| `knowledge_base` \| `analysis_engine` | |
+| `source` | `farmer_report` \| `photo` \| `weather` \| `satellite` \| `knowledge_base` \| `analysis_engine` \| `reference_photos` | |
 | `availability` | `available` \| `unavailable` \| `not_integrated` | Unavailable ≠ normal |
 | `observation` | string | |
 | `observed_at` | datetime \| null | Real observation time only; null if unknown |

@@ -127,7 +127,9 @@ def farmer_report_evidence(report: FarmerReport) -> Evidence:
     )
 
 
-def not_integrated_evidence(*, include_weather: bool = True) -> list[Evidence]:
+def not_integrated_evidence(
+    *, include_weather: bool = True, include_references: bool = True
+) -> list[Evidence]:
     evidence = [
         Evidence(
             id="ev_satellite",
@@ -142,6 +144,15 @@ def not_integrated_evidence(*, include_weather: bool = True) -> list[Evidence]:
             observation="No agricultural guidance was retrieved; no sources are cited.",
         ),
     ]
+    if include_references:
+        evidence.append(
+            Evidence(
+                id="ev_references",
+                source=SourceKind.REFERENCE_PHOTOS,
+                availability=EvidenceAvailability.NOT_INTEGRATED,
+                observation="No labelled reference photos were compared.",
+            )
+        )
     if include_weather:
         evidence.insert(
             0,
@@ -208,7 +219,48 @@ def farmer_report_source() -> DataSource:
     )
 
 
-def not_integrated_sources(*, include_weather: bool = True) -> list[DataSource]:
+def reference_evidence(report: FarmerReport) -> Evidence:
+    votes = report.references
+    if votes is None:
+        return Evidence(
+            id="ev_references",
+            source=SourceKind.REFERENCE_PHOTOS,
+            availability=EvidenceAvailability.UNAVAILABLE,
+            observation=report.references_unavailable_reason
+            or "No labelled reference photos were compared.",
+        )
+    shares = ", ".join(f"{label.replace('_', ' ')} {count}" for label, count in votes.counts)
+    return Evidence(
+        id="ev_references",
+        source=SourceKind.REFERENCE_PHOTOS,
+        availability=EvidenceAvailability.AVAILABLE,
+        observation=(
+            f"Labels of the {votes.total} public-dataset {votes.crop} photos that look most "
+            f"like these photos: {shares}. Visual similarity only, not a diagnosis."
+        ),
+    )
+
+
+def reference_source(report: FarmerReport) -> DataSource:
+    votes = report.references
+    return DataSource(
+        id="src_references",
+        name="Reference photo library",
+        kind=SourceKind.REFERENCE_PHOTOS,
+        status=DataSourceStatus.USED if votes else DataSourceStatus.UNAVAILABLE,
+        description=(
+            "DINOv2 visual similarity to labelled public photos (PlantDoc, PlantVillage, "
+            f"Mendeley rice), index {votes.index_version}. Rice, tomato and potato only."
+            if votes
+            else report.references_unavailable_reason
+            or "No labelled reference photos were compared."
+        ),
+    )
+
+
+def not_integrated_sources(
+    *, include_weather: bool = True, include_references: bool = True
+) -> list[DataSource]:
     sources = [
         DataSource(
             id="src_satellite",
@@ -225,6 +277,16 @@ def not_integrated_sources(*, include_weather: bool = True) -> list[DataSource]:
             description="Planned for Milestone 4.",
         ),
     ]
+    if include_references:
+        sources.append(
+            DataSource(
+                id="src_references",
+                name="Reference photo library",
+                kind=SourceKind.REFERENCE_PHOTOS,
+                status=DataSourceStatus.NOT_INTEGRATED,
+                description="Comparison with labelled public crop photos is not enabled.",
+            )
+        )
     if include_weather:
         sources.insert(
             0,

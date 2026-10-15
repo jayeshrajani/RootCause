@@ -23,6 +23,7 @@ const CROP_KEYS: Record<Crop, TranslationKey> = {
 const SOURCE_KEYS: Record<SourceKind, TranslationKey> = {
   farmer_report: "sourceYourReport", photo: "sourcePhotos", weather: "sourceWeather",
   satellite: "sourceSatellite", knowledge_base: "sourceGuidance", analysis_engine: "sourceEngine",
+  reference_photos: "sourceReferences",
 };
 const STATUS_KEYS: Record<string, TranslationKey> = {
   used: "sourceUsed", unavailable: "sourceUnavailable", not_integrated: "sourceNotConnected",

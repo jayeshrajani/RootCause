@@ -1,6 +1,8 @@
 # Crop reference retrieval (DINOv2 + FAISS)
 
-Owner: **Shivansh**. Consumer: the triage orchestrator (Jayesh's Gemini/ADK flow).
+Owner: **Shivansh**. Consumer: the AI triage service (`app/services/triage/references.py`), which
+turns matches into a per-cause `reference_score` used in evidence-fit ranking (see
+[api-contract.md](api-contract.md)).
 
 Given 1–3 farmer photos and a crop, retrieval returns the most visually similar **labelled
 reference photos** of that crop from public datasets. It does not diagnose. The orchestrator

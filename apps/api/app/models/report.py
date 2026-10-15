@@ -6,6 +6,7 @@ Sensitive fields are excluded from repr so they cannot leak into logs by acciden
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from app.models.references import ReferenceVotes
 from app.models.weather import RecentWeather
 from app.schemas.triage import Crop, ResponseLanguage, SymptomDuration
 
@@ -33,3 +34,5 @@ class FarmerReport:
     response_language: ResponseLanguage = ResponseLanguage.ENGLISH
     weather: RecentWeather | None = None
     weather_unavailable_reason: str | None = None
+    references: ReferenceVotes | None = None
+    references_unavailable_reason: str | None = None

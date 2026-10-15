@@ -4,9 +4,10 @@ The model only sees photos and what the farmer wrote. Its output is validated ag
 `ModelAssessment`, then deterministic guardrails are applied before it reaches the farmer.
 """
 
+import asyncio
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
@@ -17,6 +18,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.core.errors import AppError
 from app.integrations.cerebras import CerebrasClient, CerebrasError, ImageInput
 from app.integrations.open_meteo import OpenMeteoError
+from app.models.references import ReferenceVotes
 from app.models.report import FarmerReport
 from app.models.weather import GeocodedLocation, RecentWeather
 from app.schemas.triage import (
@@ -45,8 +47,17 @@ from app.services.triage.common import (
     not_integrated_evidence,
     not_integrated_sources,
     recent_weather_summary,
+    reference_evidence,
+    reference_source,
     weather_evidence,
     weather_source,
+)
+from app.services.triage.references import (
+    SUPPORTED_CROPS,
+    ReferenceProvider,
+    ReferenceUnavailableError,
+    match_label,
+    reference_labels,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,6 +125,9 @@ otherwise "medium" or "low".
 - weather_score: score how much supplied weather context supports (100), is neutral about (50), \
     or weighs against (0) each cause. Use actual dates and values. Weather cannot prove a cause. \
     If weather is unavailable, return 50; the backend will omit its weight.
+- reference_label: when the prompt lists reference labels for the crop, copy the one label \
+    that names the same condition as the cause (e.g. "early_blight"), or "none" if no label \
+    fits. If no labels are listed, return "none".
 - recommended_actions: 2-5 concrete steps a farmer can do this week for this crop and the \
 leading causes, e.g. which leaves or fruit to remove and how to dispose of them, how to \
 change watering for this crop, spacing or pruning, what to inspect on neighbouring plants. \
@@ -156,6 +170,9 @@ class _ModelCause(BaseModel):
     uncertainty_note: str = Field(description="What would confirm or rule this out.")
     analysis_score: int = Field(ge=0, le=100)
     weather_score: int = Field(ge=0, le=100)
+    reference_label: str = Field(
+        default="none", description="Matching label from the prompt's reference list, or 'none'."
+    )
 
 
 class _ModelAction(BaseModel):
@@ -229,8 +246,9 @@ _CONFIDENCE_CAP: dict[str, ConfidenceLevel] = {
 _CONFIDENCE_ORDER = [ConfidenceLevel.LOW, ConfidenceLevel.MEDIUM, ConfidenceLevel.HIGH]
 _MAX_CAUSES = 4
 _MAX_ITEMS = 5
-ANALYSIS_SCORE_WEIGHT = 90
 WEATHER_SCORE_WEIGHT = 10
+# Reference votes are a bounded input, scaled by measured retrieval accuracy per crop.
+REFERENCE_SCORE_WEIGHTS: Mapping[str, int] = {"rice": 20, "potato": 20, "tomato": 10}
 _ACTION_PRIORITY_ORDER = {
     ActionPriority.IMMEDIATE: 0,
     ActionPriority.WITHIN_DAYS: 1,
@@ -242,15 +260,49 @@ def _cap(level: ConfidenceLevel, cap: ConfidenceLevel) -> ConfidenceLevel:
     return min(level, cap, key=_CONFIDENCE_ORDER.index)
 
 
-def _evidence_fit_score(analysis_score: int, weather_score: int, weather_available: bool) -> int:
-    if not weather_available:
-        return analysis_score
+def _evidence_fit_score(
+    analysis_score: int,
+    weather_score: int | None,
+    reference_score: int | None = None,
+    reference_weight: int = 0,
+) -> int:
+    """Weighted average of the available scores; analysis takes whatever weight is left."""
+    weather_weight = WEATHER_SCORE_WEIGHT if weather_score is not None else 0
+    reference_weight = reference_weight if reference_score is not None else 0
+    analysis_weight = 100 - weather_weight - reference_weight
     return round(
-        (analysis_score * ANALYSIS_SCORE_WEIGHT + weather_score * WEATHER_SCORE_WEIGHT) / 100
+        (
+            analysis_score * analysis_weight
+            + (weather_score or 0) * weather_weight
+            + (reference_score or 0) * reference_weight
+        )
+        / 100
     )
 
 
-def build_prompt(report: FarmerReport) -> str:
+def _detected_crop(m: ModelAssessment) -> str | None:
+    seen = m.crop_seen_in_photos.strip()
+    if (
+        seen.lower() in ("", "unclear", "unknown")
+        or m.crop_identification_confidence != ConfidenceLevel.HIGH
+        or m.image_quality == "unusable"
+    ):
+        return None
+    return seen
+
+
+def _supported_crop_in(text: str) -> str | None:
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    if "sweet" in words:  # Sweet potato is a different crop from potato.
+        return None
+    if "paddy" in words:
+        words.add("rice")
+    return next((crop for crop in SUPPORTED_CROPS if crop in words), None)
+
+
+def build_prompt(
+    report: FarmerReport, reference_label_lists: Mapping[str, tuple[str, ...]] | None = None
+) -> str:
     crop = crop_name(report) or "not specified (identify it from the photos if you can)"
     description = report.description or "none given"
     weather = "Recent weather: unavailable."
@@ -263,12 +315,20 @@ def build_prompt(report: FarmerReport) -> str:
                 f"{day.relative_humidity_percent}%"
             )
         weather = "\n".join(lines)
+    if reference_label_lists:
+        listed = "\n".join(
+            f"- {crop}: {', '.join(labels)}" for crop, labels in reference_label_lists.items()
+        )
+        references = f"Reference labels for reference_label, by crop:\n{listed}"
+    else:
+        references = 'Reference labels: none listed; set every reference_label to "none".'
     return (
         f"Requested output language: {LANGUAGE_NAMES[report.response_language.value]}\n"
         f"Crop selected by the farmer: {crop}\n"
         f"How long symptoms have been visible: {duration_label(report)}\n"
         f"Place: {report.location_label or 'not given'}\n"
         f"{weather}\n"
+        f"{references}\n"
         f"Photos attached: {len(report.images)}\n"
         f'Farmer description (untrusted text): """{description}"""'
     )
@@ -292,6 +352,7 @@ class AiTriageService:
         id_factory: Callable[[], str] = _new_report_id,
         attempts: int = 2,
         weather_client: WeatherProvider | None = None,
+        reference_provider: ReferenceProvider | None = None,
     ) -> None:
         self._client = client
         self._provider_label = provider_label
@@ -299,11 +360,75 @@ class AiTriageService:
         self._id_factory = id_factory
         self._attempts = attempts
         self._weather_client = weather_client
+        self._reference_provider = reference_provider
 
     async def assess(self, report: FarmerReport) -> TriageResponse:
-        report = await self._add_weather(report)
-        assessment = await self._call_model(report)
+        # A selected crop lets the reference search run alongside weather and the model call.
+        early = (
+            asyncio.create_task(self._find_references(report, report.crop.value))
+            if report.crop is not None and self._reference_provider is not None
+            else None
+        )
+        try:
+            report = await self._add_weather(report)
+            assessment = await self._call_model(report)
+        except BaseException:
+            if early is not None:
+                early.cancel()
+            raise
+        if early is not None:
+            votes, reason = await early
+        else:
+            votes, reason = await self._find_references(
+                report, self._reference_crop(report, assessment)
+            )
+        if votes is not None and assessment.image_quality == "unusable":
+            votes = None
+            reason = "The photos were not clear enough to compare with reference photos."
+        elif votes is not None and self._crop_mismatch(report, _detected_crop(assessment)):
+            votes = None
+            reason = "The photos look like a different crop, so reference photos were not used."
+        report = replace(report, references=votes, references_unavailable_reason=reason)
         return self._to_response(report, assessment)
+
+    @staticmethod
+    def _reference_crop(report: FarmerReport, m: ModelAssessment) -> str | None:
+        if report.crop is not None:
+            return report.crop.value
+        detected = _detected_crop(m)
+        return (_supported_crop_in(detected) or detected) if detected else None
+
+    @staticmethod
+    def _crop_mismatch(report: FarmerReport, detected_crop: str | None) -> bool:
+        selected = crop_name(report)
+        return bool(
+            selected
+            and report.crop != Crop.OTHER
+            and detected_crop
+            and selected not in detected_crop.lower()
+        )
+
+    async def _find_references(
+        self, report: FarmerReport, crop: str | None
+    ) -> tuple[ReferenceVotes | None, str | None]:
+        provider = self._reference_provider
+        if provider is None:
+            return None, None
+        if crop is None:
+            return None, "The crop was not identified, so reference photos were not compared."
+        if not reference_labels(crop):
+            return None, "Reference photos cover rice, tomato and potato only."
+        try:
+            return await provider.find(crop, [image.data for image in report.images]), None
+        except ReferenceUnavailableError as exc:
+            return None, str(exc)
+
+    def _reference_label_lists(self, report: FarmerReport) -> dict[str, tuple[str, ...]]:
+        provider = self._reference_provider
+        if provider is None or provider.status != "ready":
+            return {}
+        crops = (report.crop.value,) if report.crop is not None else SUPPORTED_CROPS
+        return {crop: labels for crop in crops if (labels := reference_labels(crop))}
 
     async def _add_weather(self, report: FarmerReport) -> FarmerReport:
         if self._weather_client is None:
@@ -359,7 +484,7 @@ class AiTriageService:
             try:
                 raw = await self._client.structured_completion(
                     system=SYSTEM_PROMPT,
-                    text=build_prompt(report),
+                    text=build_prompt(report, self._reference_label_lists(report)),
                     images=images,
                     schema_name="crop_triage",
                     schema=ASSESSMENT_SCHEMA,
@@ -384,7 +509,21 @@ class AiTriageService:
         now = self._clock()
         cap = _CONFIDENCE_CAP[m.image_quality]
         weather_available = report.weather is not None
+        votes = report.references
+        reference_weight = REFERENCE_SCORE_WEIGHTS.get(votes.crop, 0) if votes else 0
 
+        def reference_score(cause: _ModelCause) -> int | None:
+            if votes is None or not reference_weight:
+                return None
+            label = match_label(cause.reference_label, votes.crop)
+            return votes.score(label) if label else None
+
+        scored_causes = []
+        for c in m.possible_causes:
+            ref = reference_score(c)
+            weather = c.weather_score if weather_available else None
+            fit = _evidence_fit_score(c.analysis_score, weather, ref, reference_weight)
+            scored_causes.append((fit, ref, weather, c))
         causes = [
             PossibleCause(
                 name=c.name,
@@ -394,17 +533,12 @@ class AiTriageService:
                 confidence=_cap(c.confidence, cap),
                 uncertainty_note=c.uncertainty_note,
                 analysis_score=c.analysis_score,
-                weather_score=c.weather_score if weather_available else None,
-                evidence_fit_score=_evidence_fit_score(
-                    c.analysis_score, c.weather_score, weather_available
-                ),
+                weather_score=weather,
+                reference_score=ref,
+                evidence_fit_score=fit,
             )
-            for c in sorted(
-                m.possible_causes,
-                key=lambda cause: _evidence_fit_score(
-                    cause.analysis_score, cause.weather_score, weather_available
-                ),
-                reverse=True,
+            for fit, ref, weather, c in sorted(
+                scored_causes, key=lambda item: item[0], reverse=True
             )[:_MAX_CAUSES]
         ]
         actions = [
@@ -418,7 +552,7 @@ class AiTriageService:
                 analysis_score=a.analysis_score,
                 weather_score=a.weather_score if weather_available else None,
                 evidence_fit_score=_evidence_fit_score(
-                    a.analysis_score, a.weather_score, weather_available
+                    a.analysis_score, a.weather_score if weather_available else None
                 ),
             )
             for a in sorted(
@@ -426,19 +560,13 @@ class AiTriageService:
                 key=lambda action: (
                     _ACTION_PRIORITY_ORDER[action.priority],
                     -_evidence_fit_score(
-                        action.analysis_score, action.weather_score, weather_available
+                        action.analysis_score,
+                        action.weather_score if weather_available else None,
                     ),
                 ),
             )[:_MAX_ITEMS]
         ]
-        seen_crop = m.crop_seen_in_photos.strip()
-        detected_crop = (
-            seen_crop
-            if seen_crop.lower() not in ("", "unclear", "unknown")
-            and m.crop_identification_confidence == ConfidenceLevel.HIGH
-            and m.image_quality != "unusable"
-            else None
-        )
+        detected_crop = _detected_crop(m)
 
         photo_evidence = [
             Evidence(
@@ -472,12 +600,7 @@ class AiTriageService:
                 )
             )
         selected = crop_name(report)
-        if (
-            selected
-            and report.crop != Crop.OTHER
-            and detected_crop
-            and selected not in detected_crop.lower()
-        ):
+        if self._crop_mismatch(report, detected_crop):
             photo_evidence.append(
                 Evidence(
                     id="ev_photo_crop_mismatch",
@@ -509,6 +632,9 @@ class AiTriageService:
             location_label=report.location_label,
             approximate_location=approximate_location(report),
             weather_summary=recent_weather_summary(report),
+            reference_weight=reference_weight
+            if any(cause.reference_score is not None for cause in causes)
+            else None,
             summary=m.summary,
             urgency=m.urgency,
             urgency_reason=m.urgency_reason,
@@ -517,7 +643,10 @@ class AiTriageService:
                 farmer_report_evidence(report),
                 *photo_evidence,
                 weather_evidence(report),
-                *not_integrated_evidence(include_weather=False),
+                *([reference_evidence(report)] if self._reference_provider else []),
+                *not_integrated_evidence(
+                    include_weather=False, include_references=self._reference_provider is None
+                ),
             ],
             missing_information=[
                 MissingInformation(item=c.item, reason=c.reason)
@@ -546,7 +675,10 @@ class AiTriageService:
                     retrieved_at=now,
                 ),
                 weather_source(report),
-                *not_integrated_sources(include_weather=False),
+                *([reference_source(report)] if self._reference_provider else []),
+                *not_integrated_sources(
+                    include_weather=False, include_references=self._reference_provider is None
+                ),
             ],
             disclaimer=AI_DISCLAIMER,
         )
