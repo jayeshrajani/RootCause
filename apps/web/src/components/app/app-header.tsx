@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LogIn, LogOut, Plus } from "lucide-react";
 
 import { Button, ButtonLink } from "@/components/brand/button";
@@ -44,6 +45,7 @@ function ProfileChip() {
 
 export function AppHeader() {
   const { t } = useI18n();
+  const onReportPage = usePathname() === "/report";
   return (
     <header className="sticky top-0 z-40 border-b border-forest-900/10 bg-background/75 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5">
@@ -51,10 +53,12 @@ export function AppHeader() {
         <div className="flex items-center gap-1.5 sm:gap-2">
           <LanguageSwitcher />
           <ProfileChip />
-          <ButtonLink href="/report" variant="solid" aria-label={t("newReport")} className="size-10 px-0 sm:w-auto sm:px-4">
-            <Plus aria-hidden />
-            <span className="hidden sm:inline">{t("newReport")}</span>
-          </ButtonLink>
+          {onReportPage ? null : (
+            <ButtonLink href="/report" variant="solid" aria-label={t("newReport")} className="size-10 px-0 sm:w-auto sm:px-4">
+              <Plus aria-hidden />
+              <span className="hidden sm:inline">{t("newReport")}</span>
+            </ButtonLink>
+          )}
         </div>
       </div>
     </header>

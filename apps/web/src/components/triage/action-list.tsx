@@ -43,7 +43,7 @@ export function ActionList({ actions }: { actions: RecommendedAction[] }) {
               </p>
               <p className="leading-snug font-medium">{action.action}</p>
               <p className="text-sm text-muted-foreground">{action.rationale}</p>
-              <EvidenceFit score={action.evidence_fit_score} weatherScore={action.weather_score} />
+              <EvidenceFit score={action.evidence_fit_score} />
               {action.addresses || action.requires_expert_verification ? (
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {action.addresses ? (

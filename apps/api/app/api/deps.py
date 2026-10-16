@@ -5,11 +5,31 @@ from fastapi import Depends, Request
 from app.core.config import Settings, get_settings
 from app.integrations.cerebras import CerebrasClient
 from app.integrations.open_meteo import OpenMeteoClient
+from app.integrations.vision import VisionModel
+from app.services.satellite import SatelliteService
 from app.services.triage import AiTriageService, MockTriageService, TriageService
+from app.services.triage.identify import CropIdentifier, CropSimilaritySource
 from app.services.triage.references import ReferenceProvider
 from app.services.triage.translate import TriageTranslator
+from app.services.weather import CachedWeatherClient
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+def get_weather_client(request: Request) -> CachedWeatherClient:
+    client: CachedWeatherClient | None = getattr(request.app.state, "weather_client", None)
+    return client if client is not None else CachedWeatherClient(OpenMeteoClient())
+
+
+WeatherClientDep = Annotated[CachedWeatherClient, Depends(get_weather_client)]
+
+
+def get_satellite_service(request: Request) -> SatelliteService:
+    service: SatelliteService | None = getattr(request.app.state, "satellite_service", None)
+    return service if service is not None else SatelliteService(None)
+
+
+SatelliteServiceDep = Annotated[SatelliteService, Depends(get_satellite_service)]
 
 
 def get_reference_provider(request: Request) -> ReferenceProvider | None:
@@ -32,17 +52,37 @@ def _cerebras_client(settings: Settings) -> CerebrasClient | None:
     )
 
 
+def vision_model(settings: Settings) -> VisionModel | None:
+    """The configured multimodal model, or None for the labelled mock."""
+    return _cerebras_client(settings)
+
+
 def get_triage_service(
-    settings: SettingsDep, reference_provider: ReferenceProviderDep = None
+    settings: SettingsDep,
+    reference_provider: ReferenceProviderDep = None,
+    satellite: Annotated[SatelliteService | None, Depends(get_satellite_service)] = None,
+    weather: Annotated[CachedWeatherClient | None, Depends(get_weather_client)] = None,
 ) -> TriageService:
-    client = _cerebras_client(settings)
+    client = vision_model(settings)
     if client is not None:
         return AiTriageService(
-            client, weather_client=OpenMeteoClient(), reference_provider=reference_provider
+            client,
+            weather_client=weather or OpenMeteoClient(),
+            reference_provider=reference_provider,
+            satellite_service=satellite if satellite is not None and satellite.configured else None,
         )
     return MockTriageService()
 
 
+def get_crop_identifier(
+    settings: SettingsDep, reference_provider: ReferenceProviderDep = None
+) -> CropIdentifier:
+    references = (
+        reference_provider if isinstance(reference_provider, CropSimilaritySource) else None
+    )
+    return CropIdentifier(vision_model(settings), references)
+
+
 def get_triage_translator(settings: SettingsDep) -> TriageTranslator | None:
-    client = _cerebras_client(settings)
+    client = vision_model(settings)
     return TriageTranslator(client) if client is not None else None

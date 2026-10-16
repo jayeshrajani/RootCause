@@ -23,6 +23,58 @@ still be submitted without selecting a match, but weather lookup may not resolve
 `analysis_mode` is `ai` when an analysis provider is configured (currently Cerebras), else `mock`.
 `reference_photos` is `disabled` (no `ROOTCAUSE_RETRIEVAL_INDEX_VERSION`), `loading` (model and
 index load in the background for about 30 s after startup), `ready` or `failed`.
+`satellite_imagery` is `configured` when `GOOGLE_CLOUD_PROJECT_ID` is set (credentials are only
+checked on first use), else `disabled`.
+
+## `POST /satellite/analysis`
+
+`Content-Type: application/json`. Sentinel-2 vegetation evidence from Google Earth Engine
+(`COPERNICUS/S2_SR_HARMONIZED`). Always returns 200; availability is reported in `status`.
+
+```json
+{ "latitude": 30.9010, "longitude": 75.8573, "analysis_date": "2025-05-01", "field_boundary": null }
+```
+
+`analysis_date` is optional (defaults to today, not in the future, not before 2017-06-01).
+`field_boundary` is an optional GeoJSON `Polygon` (closed rings, ≤ 500 vertices, ≤ 0.2° span);
+without it the API samples a 100 m buffer around the point. Clouds, shadows, snow and water are
+masked with the Scene Classification Layer (classes 4, 5, 7 kept). NDVI = (B8−B4)/(B8+B4),
+NDMI = (B8−B11)/(B8+B11). The latest scene with ≥ 60% clear pixels is reported; the trend compares
+the median of the last 45 days with the 45 days before (±0.05 NDVI threshold).
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `status` | `available` \| `insufficient_data` \| `unavailable` \| `not_configured` \| `not_requested` | Values are `null` unless `available`; never invented |
+| `ndvi`, `ndmi` | number \| null | Mean of clear pixels in the latest usable scene |
+| `ndvi_change`, `ndmi_change` | number \| null | Recent median − baseline median |
+| `trend`, `ndmi_trend` | `improving` \| `stable` \| `declining` \| `unknown` | |
+| `observation_date` | date \| null | Real acquisition date of the reported scene |
+| `observation_age_days` | integer \| null | Days between observation and `analysis_date` |
+| `valid_pixel_coverage` | number \| null | Clear-pixel share 0–1 of the reported scene |
+| `sampling_method`, `buffer_m`, `sampling_area_ha` | | How the area was sampled |
+| `recent_window`, `baseline_window` | `{ start, end, clear_observations, ndvi_median, ndmi_median }` \| null | |
+| `interpretable` | boolean | `true` only with a precise location, real crop cover, a known trend and a recent scene |
+| `limitations[]` | enum[] | `approximate_area`, `approximate_location`, `no_baseline`, `single_observation`, `partial_coverage`, `stale_observation`, `low_vegetation` |
+| `reason`, `message` | string \| null | Machine reason and human message when not available |
+
+Results are cached in-process for 6 hours. Coordinates and the field geometry are sent to
+Google Earth Engine.
+
+## `POST /triage/identify`
+
+Stage 1. `multipart/form-data` with `images` (same rules as `/triage`) and optional
+`latitude`/`longitude`. Runs a short crop-only model call and a cross-crop reference-photo search
+(rice, tomato, potato) in parallel. Coordinates, if sent, start the weather and satellite lookups
+in the background so the following `/triage` finds them cached.
+
+```json
+{ "crop": "tomato", "confidence": "high", "needs_confirmation": false, "candidates": ["tomato", "potato"], "image_quality": "good", "reference_agreement": "agrees", "analysis_mode": "ai" }
+```
+
+`needs_confirmation` is `false` only when the model is highly confident, the photo is usable and
+the reference photos do not clearly point to another crop (`reference_agreement` is `agrees`,
+`not_covered` or `unavailable`). Clients then send the crop to `/triage`; otherwise they ask the
+farmer to pick from `candidates`. Model failures return `needs_confirmation: true`, never an error.
 
 ## `POST /triage`
 
@@ -52,27 +104,30 @@ The response includes `location_label` for a farmer-entered place, or `approxima
 for shared coordinates (rounded to two decimals), plus `weather_summary` when recent estimates
 are available. No reverse geocoding is performed.
 
-Each AI-generated cause and recommended action includes `analysis_score`, `weather_score`, and
-`evidence_fit_score`, each from 0 to 100. Causes may also include `reference_score`. The backend
-calculates the evidence-fit score as a weighted average of the available components:
+Each AI-generated cause includes `analysis_score` (photos and report, from the model),
+`condition_key` (a normalised id such as `late_blight`, `water_stress` or `fungal_disease`) and
+`evidence_fit_score`, each score 0–100. Causes may also include `reference_score`.
 
-| Components available | Rice | Potato | Tomato |
-| --- | --- | --- | --- |
-| Analysis only | 100 | 100 | 100 |
-| Analysis + weather | 90 / – / 10 | 90 / – / 10 | 90 / – / 10 |
-| Analysis + references | 70 / 30 / – | 80 / 20 / – | 90 / 10 / – |
-| All three | 60 / 30 / 10 | 70 / 20 / 10 | 80 / 10 / 10 |
+The backend computes evidence fit in two deterministic steps:
 
-Weights are analysis / references / weather; other crops never use references. They were tuned
-on held-out field photos (see [retrieval.md](retrieval.md#hybrid-scoring)).
+1. **Blend** the analysis score with reference photos: rice 70 / 30, potato 80 / 20, tomato
+   90 / 10 (analysis / references; tuned on held-out field photos, see
+   [retrieval.md](retrieval.md#hybrid-scoring)). Other crops use analysis only.
+2. **Adjust** with bounded, rule-based points recorded in `evidence_ledger`: weather −10…+10
+   from the last 7 days (temperature band, humid days, rain days, hot days, cold nights per
+   condition) and satellite −6…+6 from the Sentinel-2 greenness/moisture trend, only when the
+   satellite evidence is `interpretable`. The model does not score weather or satellite.
+
+`weather_score` and `satellite_score` are those points mapped to 0–100 (50 = neutral), kept for
+compatibility. Weather and satellite lookups run in parallel and never block a triage.
 
 `reference_score` is the share of the 10 most visually similar labelled reference photos
 (DINOv2 + FAISS, rice, tomato and potato only) whose label the model matched to that cause. It is
 `null` when reference photos were not compared or no reference label matches the cause; the
 response's `reference_weight` gives the weight used. Reference comparison is best-effort and never
-blocks a triage. Causes are ranked by evidence fit. Actions retain their urgency tier and are
-ranked by evidence fit within that tier (actions do not use references). These heuristic fit
-scores are not probabilities or calibrated disease likelihoods.
+blocks a triage. Causes are ranked by evidence fit. Actions keep their urgency tier and are
+ranked by `analysis_score` within it (their `evidence_fit_score` equals `analysis_score`). These
+heuristic fit scores are not probabilities or calibrated disease likelihoods.
 
 ### 200 response: `TriageResponse`
 
@@ -87,6 +142,8 @@ scores are not probabilities or calibrated disease likelihoods.
 | `location_label` | string \| null | Farmer-entered place name, if provided |
 | `approximate_location` | string \| null | Coordinates rounded to two decimals and formatted for display |
 | `weather_summary` | string \| null | Recent Open-Meteo estimate summary, when available |
+| `weather_facts` | `WeatherFacts` \| null | `days`, `start`, `end`, `temp_min_c`, `temp_max_c`, `temp_mean_c`, `rain_total_mm`, `wet_days` (≥ 1 mm), `humid_days` (mean RH ≥ 80%), `hot_days` (≥ 35 °C), `cold_nights` (≤ 8 °C), `pattern` (`wet`, `hot_dry`, `cold`, `humid`, `dry`, `mild`) |
+| `satellite` | `SatelliteAnalysis` \| null | See `POST /satellite/analysis`; `null` when satellite evidence is disabled |
 | `reference_weight` | integer \| null | Weight (%) of `reference_score` in evidence fit, when any cause has one |
 | `summary` | string | Plain-language overview |
 | `urgency` | `low` \| `moderate` \| `high` \| `critical` | |
@@ -113,7 +170,10 @@ scores are not probabilities or calibrated disease likelihoods.
 | `analysis_score` | integer \| null | 0–100 image/report relevance; not a probability |
 | `weather_score` | integer \| null | 0–100 weather relevance; `null` when unavailable |
 | `reference_score` | integer \| null | 0–100 share of similar labelled reference photos showing this cause; not a probability |
-| `evidence_fit_score` | integer \| null | Weighted fit score; not a probability |
+| `satellite_score` | integer \| null | Satellite points mapped to 0–100 (50 neutral); `null` unless satellite evidence is interpretable |
+| `evidence_fit_score` | integer \| null | Blended score plus ledger points, clamped 0–100; not a probability |
+| `condition_key` | string \| null | Normalised condition id used by the rules and reference photos |
+| `evidence_ledger[]` | `{ signal: "weather" \| "satellite", effect: "supports" \| "weighs_against" \| "neutral", points, reason }` | Rule-based adjustments; `reason` is English text built from measured values |
 
 `Evidence`
 

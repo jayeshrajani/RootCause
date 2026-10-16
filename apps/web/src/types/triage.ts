@@ -57,6 +57,7 @@ export interface Evidence {
 
 export interface PossibleCause {
   name: string;
+  condition_key?: string | null;
   explanation: string;
   supporting_evidence: string[];
   contradictory_evidence: string[];
@@ -65,7 +66,97 @@ export interface PossibleCause {
   analysis_score: number | null;
   weather_score: number | null;
   reference_score?: number | null;
+  satellite_score?: number | null;
   evidence_fit_score: number | null;
+  evidence_ledger?: EvidenceContribution[];
+}
+
+export type EvidenceEffect = "supports" | "weighs_against" | "neutral";
+
+/** Rule-based weather/satellite adjustment to a cause's evidence fit. */
+export interface EvidenceContribution {
+  signal: "weather" | "satellite";
+  effect: EvidenceEffect;
+  points: number;
+  reason: string;
+}
+
+export type WeatherPattern = "wet" | "hot_dry" | "cold" | "humid" | "dry" | "mild";
+
+export interface WeatherFacts {
+  days: number;
+  start: string;
+  end: string;
+  temp_min_c: number;
+  temp_max_c: number;
+  temp_mean_c: number;
+  rain_total_mm: number;
+  wet_days: number;
+  humid_days: number;
+  hot_days: number;
+  cold_nights: number;
+  pattern: WeatherPattern;
+}
+
+export interface CropIdentification {
+  crop: Crop | null;
+  confidence: ConfidenceLevel;
+  needs_confirmation: boolean;
+  candidates: Crop[];
+  image_quality: string;
+  reference_agreement: "agrees" | "disagrees" | "not_covered" | "unavailable";
+  analysis_mode: AnalysisMode;
+}
+
+export type SatelliteStatus =
+  | "available"
+  | "insufficient_data"
+  | "unavailable"
+  | "not_configured"
+  | "not_requested";
+export type VegetationTrend = "improving" | "stable" | "declining" | "unknown";
+export type SatelliteLimitation =
+  | "approximate_area"
+  | "approximate_location"
+  | "no_baseline"
+  | "single_observation"
+  | "partial_coverage"
+  | "stale_observation"
+  | "low_vegetation";
+
+export interface SatelliteWindow {
+  start: string;
+  end: string;
+  clear_observations: number;
+  ndvi_median: number | null;
+  ndmi_median: number | null;
+}
+
+/** Sentinel-2 vegetation evidence (Google Earth Engine). Supporting evidence, never a diagnosis. */
+export interface SatelliteAnalysis {
+  status: SatelliteStatus;
+  source: string;
+  dataset: string;
+  analysis_date: string | null;
+  sampling_method: "buffer" | "field_boundary" | null;
+  buffer_m: number | null;
+  sampling_area_ha: number | null;
+  ndvi: number | null;
+  ndmi: number | null;
+  ndvi_change: number | null;
+  ndmi_change: number | null;
+  trend: VegetationTrend;
+  ndmi_trend: VegetationTrend;
+  observation_date: string | null;
+  observation_age_days: number | null;
+  valid_pixel_coverage: number | null;
+  recent_window: SatelliteWindow | null;
+  baseline_window: SatelliteWindow | null;
+  interpretable: boolean;
+  limitations: SatelliteLimitation[];
+  reason: string | null;
+  message: string | null;
+  retrieved_at: string | null;
 }
 
 export interface MissingInformation {
@@ -103,6 +194,8 @@ export interface TriageResponse {
   location_label: string | null;
   approximate_location: string | null;
   weather_summary: string | null;
+  weather_facts?: WeatherFacts | null;
+  satellite?: SatelliteAnalysis | null;
   reference_weight?: number | null;
   summary: string;
   urgency: UrgencyLevel;

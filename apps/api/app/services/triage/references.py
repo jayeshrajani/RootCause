@@ -4,6 +4,7 @@ The similarity search (DINOv2 + FAISS, app/services/retrieval) ranks visual rese
 Here it becomes a vote over condition labels, used as one bounded input to evidence-fit scores.
 """
 
+import asyncio
 import logging
 import threading
 from collections import Counter
@@ -134,3 +135,14 @@ class RetrievalReferenceProvider:
                 "Reference photos could not be compared for this report."
             ) from exc
         return votes_from(result, min_similarity=self._min_similarity)
+
+    async def crop_similarities(self, images: Sequence[bytes]) -> dict[str, float]:
+        """Best similarity per reference crop; empty when the library is not ready or fails."""
+        retriever = self._retriever
+        if retriever is None:
+            return {}
+        try:
+            return await asyncio.to_thread(retriever.crop_similarities, images)
+        except RetrievalError as exc:
+            logger.warning("Cross-crop reference search failed: %s", exc)
+            return {}

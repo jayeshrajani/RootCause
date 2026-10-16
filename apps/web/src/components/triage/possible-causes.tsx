@@ -4,11 +4,10 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronDown, CircleHelp, Minus, Plus } from "lucide-react";
 
-import { CONFIDENCE_DISPLAY } from "@/components/triage/display";
-import { EvidenceFit } from "@/components/triage/evidence-fit";
+import { EvidenceFit, LedgerChip } from "@/components/triage/evidence-fit";
 import { cn } from "@/lib/utils";
 import type { PossibleCause } from "@/types/triage";
-import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 
 export function ConfidenceMeter({
   level,
@@ -67,14 +66,8 @@ function CauseItem({
   defaultOpen: boolean;
   referenceWeight: number | null;
 }) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
-  const confidence = CONFIDENCE_DISPLAY[cause.confidence];
-  const confidenceKey: Record<PossibleCause["confidence"], TranslationKey> = {
-    low: "confidenceLow",
-    medium: "confidenceMedium",
-    high: "confidenceHigh",
-  };
   const panelId = `cause-${cause.name.replace(/\W+/g, "-").toLowerCase()}`;
 
   return (
@@ -89,12 +82,11 @@ function CauseItem({
         <span className="flex-1 space-y-1">
           <span className="block leading-snug font-medium sm:text-lg">{cause.name}</span>
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <ConfidenceMeter level={confidence.level} label={t(confidenceKey[cause.confidence])} />
             <EvidenceFit
               score={cause.evidence_fit_score}
-              weatherScore={cause.weather_score}
               referenceScore={cause.reference_score ?? null}
               referenceWeight={referenceWeight}
+              ledger={cause.evidence_ledger}
             />
           </span>
         </span>
@@ -126,6 +118,16 @@ function CauseItem({
                   positive={false}
                 />
               </div>
+              {language === "en" && cause.evidence_ledger?.length ? (
+                <ul className="space-y-1.5" aria-label={t("fieldConditions")}>
+                  {cause.evidence_ledger.map((item) => (
+                    <li key={item.signal} className="flex flex-wrap items-start gap-2 text-sm">
+                      <LedgerChip item={item} />
+                      <span className="flex-1 text-muted-foreground">{item.reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <p className="flex gap-2.5 text-sm text-muted-foreground">
                 <CircleHelp className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <span>{cause.uncertainty_note}</span>

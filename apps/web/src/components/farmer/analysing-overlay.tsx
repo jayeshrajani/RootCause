@@ -7,17 +7,18 @@ import { LogoMark } from "@/components/brand/logo";
 import { objectUrlFor } from "@/lib/object-urls";
 import { useI18n } from "@/lib/i18n";
 
-const STAGE_COUNT = 4;
-
-export function AnalysingOverlay({ photo }: { photo?: File }) {
+export function AnalysingOverlay({ photo, phase = "analyse" }: { photo?: File; phase?: "identify" | "analyse" }) {
   const { t } = useI18n();
-  const stages = [t("analysing"), t("observed"), t("triage"), t("nextSteps")];
+  const stages =
+    phase === "identify"
+      ? [t("identifyingCrop")]
+      : [t("checkingField"), t("analysing"), t("observed"), t("triage"), t("nextSteps")];
   const [stage, setStage] = useState(0);
 
   useEffect(() => {
-    const id = window.setInterval(() => setStage((s) => Math.min(s + 1, STAGE_COUNT - 1)), 1600);
+    const id = window.setInterval(() => setStage((s) => Math.min(s + 1, stages.length - 1)), 1600);
     return () => window.clearInterval(id);
-  }, []);
+  }, [stages.length]);
 
   return (
     <motion.div

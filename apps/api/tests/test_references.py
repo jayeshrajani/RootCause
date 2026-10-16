@@ -70,8 +70,7 @@ def cause(name: str, analysis: int, label: str) -> dict[str, Any]:
         "confidence": "medium",
         "uncertainty_note": "Check more leaves.",
         "analysis_score": analysis,
-        "weather_score": 50,
-        "reference_label": label,
+        "condition_key": label,
     }
 
 
@@ -126,19 +125,19 @@ def rice_result(*matches: ReferenceMatch) -> RetrievalResult:
 
 
 @pytest.mark.parametrize(
-    ("weather", "reference", "weight", "expected"),
+    ("reference", "weight", "adjustment", "expected"),
     [
-        (None, None, 0, 80),  # analysis only
-        (100, None, 0, 82),  # 90/10, unchanged
-        (None, 30, 20, 70),  # 80/20
-        (100, 30, 20, 72),  # 70/20/10
-        (100, 30, 10, 77),  # tomato: 80/10/10
+        (None, 0, 0, 80),  # analysis only
+        (30, 20, 0, 70),  # 80/20
+        (30, 10, 0, 75),  # tomato: 90/10
+        (None, 0, 8, 88),  # weather/satellite points are added after blending
+        (100, 30, 30, 100),  # clamped
     ],
 )
 def test_evidence_fit_weights(
-    weather: int | None, reference: int | None, weight: int, expected: int
+    reference: int | None, weight: int, adjustment: int, expected: int
 ) -> None:
-    assert _evidence_fit_score(80, weather, reference, weight) == expected
+    assert _evidence_fit_score(80, reference, weight, adjustment) == expected
 
 
 def test_votes_count_labels_among_closest_references() -> None:
@@ -190,7 +189,7 @@ async def test_reference_votes_can_reorder_causes_for_a_selected_crop() -> None:
     assert [c.reference_score for c in result.possible_causes] == [80, 20]
     assert [c.evidence_fit_score for c in result.possible_causes] == [74, 62]
     assert result.reference_weight == 30
-    assert "- rice: bacterial_blight, blast, brown_spot, tungro" in prompt_of(sent)
+    assert "blast, brown_spot, bacterial_blight, tungro, fungal_disease" in prompt_of(sent)
     evidence = next(e for e in result.evidence if e.source == "reference_photos")
     assert evidence.availability == "available"
     assert "blast 8, brown spot 2" in evidence.observation
@@ -200,7 +199,7 @@ async def test_reference_votes_can_reorder_causes_for_a_selected_crop() -> None:
 
 async def test_causes_without_a_matching_label_keep_their_score() -> None:
     provider = FakeReferences(votes("tomato", early_blight=6, healthy=4))
-    output = assessment(possible_causes=[cause("Magnesium deficiency", 80, "none")])
+    output = assessment(possible_causes=[cause("Magnesium deficiency", 80, "nutrient_deficiency")])
     service, _ = service_with(provider, completion(json.dumps(output)))
 
     result = await service.assess(replace(REPORT, crop=Crop.TOMATO))
@@ -222,7 +221,7 @@ async def test_detected_crop_is_searched_when_none_was_selected() -> None:
 
     assert provider.calls == [("tomato", 1)]
     prompt = prompt_of(sent)
-    assert "- rice:" in prompt and "- tomato:" in prompt and "- potato:" in prompt
+    assert "blast" in prompt and "late_blight" in prompt and "water_stress" in prompt
     assert result.possible_causes[0].reference_score == 100
     assert result.possible_causes[0].evidence_fit_score == 73
 
@@ -235,7 +234,7 @@ async def test_unsupported_crop_keeps_todays_scoring() -> None:
 
     assert provider.calls == []
     assert result.possible_causes[0].evidence_fit_score == 80
-    assert "Reference labels: none listed" in prompt_of(sent)
+    assert "Condition keys for condition_key: fungal_disease," in prompt_of(sent)
     evidence = next(e for e in result.evidence if e.source == "reference_photos")
     assert evidence.availability == "unavailable"
     assert "rice, tomato and potato only" in evidence.observation
@@ -269,7 +268,7 @@ async def test_references_for_a_different_crop_are_discarded() -> None:
     assert "different crop" in evidence.observation
 
 
-async def test_labels_are_only_offered_once_the_library_is_ready() -> None:
+async def test_condition_keys_do_not_depend_on_the_library() -> None:
     provider = FakeReferences(
         status="loading", error="The reference photo library is still loading."
     )
@@ -277,7 +276,7 @@ async def test_labels_are_only_offered_once_the_library_is_ready() -> None:
 
     await service.assess(replace(REPORT, crop=Crop.TOMATO))
 
-    assert "Reference labels: none listed" in prompt_of(sent)
+    assert "Condition keys for condition_key: early_blight, late_blight" in prompt_of(sent)
 
 
 async def test_without_a_provider_reference_photos_are_not_integrated() -> None:

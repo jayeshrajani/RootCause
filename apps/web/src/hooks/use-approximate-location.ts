@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 
 // Two decimals is roughly 1 km: enough for weather lookups without pinpointing a farm.
-const COORDINATE_DECIMALS = 2;
+const COORDINATE_DECIMALS = 4;
 
 type LocationState =
   | { status: "idle" }

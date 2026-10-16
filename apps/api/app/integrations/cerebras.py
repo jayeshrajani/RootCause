@@ -1,29 +1,22 @@
 """Cerebras chat-completions client (OpenAI-compatible) used for image + text analysis."""
 
-import base64
 import logging
 import ssl
 import time
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
 import truststore
 
+from app.integrations.vision import ImageInput, VisionModelError
+
+__all__ = ["CerebrasClient", "CerebrasError", "ImageInput"]
+
 logger = logging.getLogger(__name__)
 
 
-class CerebrasError(Exception):
+class CerebrasError(VisionModelError):
     """The model call failed or returned unusable output. Message is safe to log."""
-
-
-@dataclass(frozen=True, slots=True)
-class ImageInput:
-    media_type: str
-    data: bytes
-
-    def as_data_url(self) -> str:
-        return f"data:{self.media_type};base64,{base64.b64encode(self.data).decode()}"
 
 
 class CerebrasClient:

@@ -1,5 +1,5 @@
 import type { ReportFormValues } from "@/lib/schemas/report";
-import type { ApiErrorBody, TriageResponse } from "@/types/triage";
+import type { ApiErrorBody, CropIdentification, TriageResponse } from "@/types/triage";
 import type { LocationOption } from "@/types/location";
 import type { Language } from "@/lib/i18n";
 
@@ -88,6 +88,33 @@ export async function submitTriageReport(
   }
 
   return body as TriageResponse;
+}
+
+const IDENTIFY_TIMEOUT_MS = 20_000;
+
+/** Stage 1: which crop the photos show. Sending coordinates warms weather and satellite lookups.
+ * Returns null on any failure so the farmer can still continue. */
+export async function identifyCrop(values: ReportFormValues): Promise<CropIdentification | null> {
+  const form = new FormData();
+  for (const image of values.images) form.append("images", image, image.name);
+  if (values.latitude && values.longitude) {
+    form.append("latitude", values.latitude);
+    form.append("longitude", values.longitude);
+  }
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/triage/identify`, {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(IDENTIFY_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    return typeof body === "object" && body !== null && "needs_confirmation" in body
+      ? (body as CropIdentification)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function translateTriage(

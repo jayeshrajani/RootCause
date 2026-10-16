@@ -48,6 +48,26 @@ class Settings(BaseSettings):
     retrieval_index_dir: Path | None = None
     retrieval_index_version: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._-]{1,64}$")
 
+    # Google Earth Engine satellite evidence. Credentials come from ADC (local) or the
+    # attached service account / workload identity (production); never from files in Git.
+    google_cloud_project_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "GOOGLE_CLOUD_PROJECT_ID", "ROOTCAUSE_GOOGLE_CLOUD_PROJECT_ID"
+        ),
+    )
+    satellite_enabled: bool = True
+    satellite_window_days: int = Field(default=45, ge=10, le=120)
+    satellite_buffer_m: int = Field(default=100, ge=30, le=1000)
+    satellite_timeout_seconds: float = Field(default=25, gt=0, le=120)
+    satellite_min_clear_coverage: float = Field(default=0.6, gt=0, le=1)
+    satellite_stale_days: int = Field(default=20, ge=5, le=120)
+    satellite_cache_ttl_seconds: int = Field(default=6 * 3600, ge=0)
+
+    @property
+    def satellite_configured(self) -> bool:
+        return self.satellite_enabled and bool(self.google_cloud_project_id)
+
     @property
     def use_cerebras(self) -> bool:
         if self.analysis_provider == "cerebras":

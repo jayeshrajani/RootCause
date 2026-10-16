@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Camera, ChevronDown, CloudSun, FlaskConical, MapPin, MessageSquareText, Sparkles, type LucideIcon } from "lucide-react";
+import { Camera, ChevronDown, FlaskConical, MapPin, MessageSquareText, Sparkles, type LucideIcon } from "lucide-react";
 
 import { BotanicalPattern } from "@/components/brand/botanical";
 import { CONFIDENCE_DISPLAY, DATA_SOURCE_STATUS_DISPLAY, formatTimestamp, URGENCY_DISPLAY } from "@/components/triage/display";
@@ -87,7 +87,6 @@ export function SummaryCard({ result }: { result: TriageResponse }) {
   const farmerText = farmer ? farmerWords(farmer.observation) : null;
   const notChecked = result.evidence.filter((item) => item.availability !== "available");
   const hasLocation = Boolean(result.location_label || result.approximate_location);
-  const weatherText = result.weather_summary ?? t("weatherUnavailable");
 
   return (
     <motion.section aria-label={t("triage")} initial={{ opacity: 0, y: 20, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.8, ease: EASE }} className="relative overflow-hidden rounded-[28px] bg-forest-900 p-6 text-mint-100 sm:p-7">
@@ -114,7 +113,7 @@ export function SummaryCard({ result }: { result: TriageResponse }) {
 
         <Clamp text={result.summary} lines={3} className="text-sm leading-relaxed text-mint-100/85" less={t("less")} more={t("more")} />
 
-        {hasLocation ? <div className="grid gap-4 border-t border-mint-100/10 pt-4 sm:grid-cols-2"><Section icon={MapPin} title={t("fieldLocation")}><p className="text-sm leading-relaxed text-mint-100/85">{result.location_label ?? result.approximate_location}</p></Section><Section icon={CloudSun} title={t("recentWeather")}><p className="text-sm leading-relaxed text-mint-100/85">{weatherText}</p></Section></div> : null}
+        {hasLocation ? <div className="border-t border-mint-100/10 pt-4"><Section icon={MapPin} title={t("fieldLocation")}><p className="text-sm leading-relaxed text-mint-100/85">{result.location_label ?? result.approximate_location}</p></Section></div> : null}
 
         {observations.length ? <Section icon={Camera} title={t("whatWeSaw")}><ul className="space-y-1.5"><AnimatePresence initial={false}>{shownObservations.map((item) => <motion.li key={item.id} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="flex gap-2.5 text-sm leading-snug text-mint-100/85"><span className="mt-[7px] size-1 shrink-0 rounded-full bg-mint-300" aria-hidden />{item.observation}</motion.li>)}</AnimatePresence></ul>{observations.length > VISIBLE_OBSERVATIONS ? <button type="button" onClick={() => setShowAllObs((value) => !value)} aria-expanded={showAllObs} className="text-xs font-medium text-mint-300 underline-offset-2 hover:underline">{showAllObs ? t("showLess") : `${t("showAll")} ${observations.length}`}</button> : null}</Section> : null}
         {farmerText ? <Section icon={MessageSquareText} title={t("youToldUs")}><p className="line-clamp-3 text-sm italic leading-relaxed text-mint-100/75">“{farmerText}”</p></Section> : null}

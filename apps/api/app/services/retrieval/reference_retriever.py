@@ -82,6 +82,21 @@ class ReferenceRetriever:
         """`retrieve` in a worker thread, so CPU-bound embedding never blocks the event loop."""
         return await asyncio.to_thread(self.retrieve, crop_id, images, top_k=top_k)
 
+    def crop_similarities(self, images: Sequence[bytes]) -> dict[str, float]:
+        """Best similarity of the photos to each crop's library; embeds the photos once."""
+        if not 1 <= len(images) <= MAX_QUERY_IMAGES:
+            raise InvalidQueryError(f"provide 1-{MAX_QUERY_IMAGES} images")
+        vectors = self._embedder.embed(list(images))
+        best: dict[str, float] = {}
+        for crop in SupportedCrop:
+            try:
+                crop_index = self._index.for_crop(crop)
+            except IndexUnavailableError:
+                continue
+            scores, _ = crop_index.search(vectors, k=1)
+            best[crop.value] = round(float(scores.max()), 4)
+        return best
+
     def reference_image(self, match: ReferenceMatch) -> bytes:
         """Bytes of a matched reference image (e.g. to show Gemini alongside the farmer photos)."""
         if self._data_dir is None or not match.image_uri.startswith("local://"):

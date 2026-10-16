@@ -6,6 +6,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from app.schemas.satellite import SatelliteAnalysis
+
 
 class Crop(StrEnum):
     RICE = "rice"
@@ -103,10 +105,50 @@ class Evidence(BaseModel):
     )
 
 
+class EvidenceSignal(StrEnum):
+    WEATHER = "weather"
+    SATELLITE = "satellite"
+
+
+class EvidenceEffect(StrEnum):
+    SUPPORTS = "supports"
+    WEIGHS_AGAINST = "weighs_against"
+    NEUTRAL = "neutral"
+
+
+class EvidenceContribution(BaseModel):
+    """One deterministic adjustment to a cause's evidence fit, with the facts behind it."""
+
+    signal: EvidenceSignal
+    effect: EvidenceEffect
+    points: int = Field(description="Points added to (or removed from) evidence_fit_score.")
+    reason: str = Field(description="English explanation built from the measured values.")
+
+
+class WeatherFacts(BaseModel):
+    """Summary of the last completed days of Open-Meteo estimates used by the scoring rules."""
+
+    days: int
+    start: str
+    end: str
+    temp_min_c: float
+    temp_max_c: float
+    temp_mean_c: float
+    rain_total_mm: float
+    wet_days: int = Field(description="Days with at least 1 mm of rain.")
+    humid_days: int = Field(description="Days with mean relative humidity of 80% or more.")
+    hot_days: int = Field(description="Days reaching 35 C or more.")
+    cold_nights: int = Field(description="Nights at 8 C or below.")
+    pattern: str = Field(description="wet, hot_dry, cold, humid, dry or mild.")
+
+
 class PossibleCause(BaseModel):
     """A hypothesis. Never a confirmed diagnosis."""
 
     name: str
+    condition_key: str | None = Field(
+        default=None, description="Normalised condition id (e.g. late_blight, water_stress)."
+    )
     explanation: str
     supporting_evidence: list[str]
     contradictory_evidence: list[str]
@@ -128,8 +170,19 @@ class PossibleCause(BaseModel):
         description="Share of the most similar labelled reference photos showing this cause; "
         "not a probability. Omitted when no reference label matches the cause.",
     )
+    satellite_score: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Satellite vegetation-trend relevance score; omitted unless the satellite "
+        "evidence is interpretable.",
+    )
     evidence_fit_score: int | None = Field(
         default=None, ge=0, le=100, description="Weighted evidence-fit score; not a probability."
+    )
+    evidence_ledger: list[EvidenceContribution] = Field(
+        default_factory=list,
+        description="Rule-based weather and satellite adjustments behind evidence_fit_score.",
     )
 
 
@@ -181,6 +234,12 @@ class TriageResponse(BaseModel):
     location_label: str | None = None
     approximate_location: str | None = None
     weather_summary: str | None = None
+    weather_facts: WeatherFacts | None = Field(
+        default=None, description="Weather summary used by the scoring rules, when available."
+    )
+    satellite: SatelliteAnalysis | None = Field(
+        default=None, description="Sentinel-2 vegetation evidence, when it was requested."
+    )
     reference_weight: int | None = Field(
         default=None,
         ge=0,
@@ -203,3 +262,22 @@ class TriageResponse(BaseModel):
 class TranslateTriageRequest(BaseModel):
     result: TriageResponse
     target_language: ResponseLanguage
+
+
+class ReferenceAgreement(StrEnum):
+    AGREES = "agrees"
+    DISAGREES = "disagrees"
+    NOT_COVERED = "not_covered"
+    UNAVAILABLE = "unavailable"
+
+
+class CropIdentification(BaseModel):
+    """Stage 1: which crop the photos show, and whether the farmer should confirm it."""
+
+    crop: Crop | None = Field(description="Best guess, or null when unclear.")
+    confidence: ConfidenceLevel
+    needs_confirmation: bool
+    candidates: list[Crop] = Field(description="Up to 3 likely crops, best first.")
+    image_quality: str = Field(description="good, limited or unusable.")
+    reference_agreement: ReferenceAgreement
+    analysis_mode: AnalysisMode

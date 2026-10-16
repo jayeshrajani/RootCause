@@ -181,34 +181,44 @@ async def test_coordinates_fetch_weather_and_include_it_in_ai_provenance() -> No
     assert source.name == "Open-Meteo recent weather"
     assert source.status == "used"
     assert result.possible_causes[0].weather_score == 50
-    assert result.possible_causes[0].evidence_fit_score == 77
-    assert result.recommended_actions[0].evidence_fit_score == 68
+    assert result.possible_causes[0].evidence_fit_score == 80
+    assert result.possible_causes[0].evidence_ledger[0].effect == "neutral"
+    assert result.recommended_actions[0].evidence_fit_score == 70
+    assert result.weather_facts is not None and result.weather_facts.rain_total_mm == 3.2
 
 
-async def test_weather_can_adjust_cause_ranking_by_only_its_ten_percent_weight() -> None:
+async def test_weather_rules_adjust_cause_ranking_by_bounded_points() -> None:
     causes = [
         {
-            "name": "Cause supported by analysis",
-            "explanation": "Visible signs fit this cause.",
-            "supporting_evidence": ["Visible signs"],
-            "contradictory_evidence": [],
-            "confidence": "high",
-            "uncertainty_note": "Check the field.",
-            "analysis_score": 90,
-            "weather_score": 0,
-        },
-        {
-            "name": "Cause supported by weather",
-            "explanation": "Visible signs and recent weather are consistent.",
-            "supporting_evidence": ["Visible signs", "Recent rainfall estimate"],
+            "name": "Late blight",
+            "explanation": "Dark lesions could be late blight.",
+            "supporting_evidence": ["Dark lesions"],
             "contradictory_evidence": [],
             "confidence": "medium",
-            "uncertainty_note": "Check the field.",
+            "uncertainty_note": "Check leaf undersides.",
+            "analysis_score": 82,
+            "condition_key": "late_blight",
+        },
+        {
+            "name": "Water stress",
+            "explanation": "Wilting fits a lack of water.",
+            "supporting_evidence": ["Wilting"],
+            "contradictory_evidence": [],
+            "confidence": "medium",
+            "uncertainty_note": "Check soil moisture.",
             "analysis_score": 80,
-            "weather_score": 100,
+            "condition_key": "water_stress",
         },
     ]
     actions = [
+        {
+            "action": "Inspect nearby plants for similar spots",
+            "rationale": "Spread is worth checking.",
+            "addresses": "Possible disease spread",
+            "priority": "within_days",
+            "requires_expert_verification": False,
+            "analysis_score": 80,
+        },
         {
             "action": "Check the newest leaf for expanding lesions",
             "rationale": "The visible pattern is the strongest clue.",
@@ -216,33 +226,24 @@ async def test_weather_can_adjust_cause_ranking_by_only_its_ten_percent_weight()
             "priority": "within_days",
             "requires_expert_verification": False,
             "analysis_score": 90,
-            "weather_score": 0,
-        },
-        {
-            "action": "Inspect nearby plants for similar spots after recent rain",
-            "rationale": (
-                "Recent rain may make spread worth checking, but does not confirm disease."
-            ),
-            "addresses": "Possible disease spread",
-            "priority": "within_days",
-            "requires_expert_verification": False,
-            "analysis_score": 80,
-            "weather_score": 100,
         },
     ]
-    weather = StubWeatherClient()
     report = replace(REPORT, latitude=18.52, longitude=73.86)
-    service, _ = service_with(
+    service, sent = service_with(
         completion(json.dumps(assessment(possible_causes=causes, recommended_actions=actions))),
-        weather_client=weather,
+        weather_client=StubWeatherClient(),
     )
 
     result = await service.assess(report)
 
-    assert result.possible_causes[0].name == "Cause supported by weather"
-    assert [cause.evidence_fit_score for cause in result.possible_causes] == [82, 81]
-    assert result.recommended_actions[0].action.startswith("Inspect nearby plants")
-    assert [action.evidence_fit_score for action in result.recommended_actions] == [82, 81]
+    # One dry day (3.2 mm): +5 for water stress, neutral for late blight.
+    assert [c.condition_key for c in result.possible_causes] == ["water_stress", "late_blight"]
+    assert [c.evidence_fit_score for c in result.possible_causes] == [85, 82]
+    assert result.possible_causes[0].evidence_ledger[0].points == 5
+    assert "Little rain" in result.possible_causes[0].evidence_ledger[0].reason
+    assert "weather_score" not in json.dumps(sent[0]["response_format"])
+    assert result.recommended_actions[0].action.startswith("Check the newest leaf")
+    assert [a.evidence_fit_score for a in result.recommended_actions] == [90, 80]
 
 
 async def test_weather_failure_does_not_block_ai_triage() -> None:

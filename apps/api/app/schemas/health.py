@@ -12,3 +12,4 @@ class HealthResponse(BaseModel):
     analysis_mode: AnalysisMode
     model: str | None = None
     reference_photos: Literal["disabled", "loading", "ready", "failed"] = "disabled"
+    satellite_imagery: Literal["disabled", "configured"] = "disabled"

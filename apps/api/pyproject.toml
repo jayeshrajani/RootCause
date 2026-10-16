@@ -15,6 +15,8 @@ dependencies = [
   "truststore>=0.10",
   "pillow>=11",
   "numpy>=2.0",
+  # Google Earth Engine (Sentinel-2 vegetation evidence); auth via ADC / service account.
+  "earthengine-api>=1.7",
 ]
 
 [project.optional-dependencies]
@@ -67,4 +69,9 @@ plugins = ["pydantic.mypy"]
 module = ["torch", "torch.*", "transformers", "transformers.*", "faiss", "faiss.*", "safetensors", "safetensors.*"]
 follow_imports = "skip"
 follow_imports_for_stubs = true
+ignore_missing_imports = true
+
+# The Earth Engine SDK ships without type information.
+[[tool.mypy.overrides]]
+module = ["ee", "ee.*"]
 ignore_missing_imports = true

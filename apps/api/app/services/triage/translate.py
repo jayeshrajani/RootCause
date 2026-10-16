@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from pydantic import BaseModel, ValidationError
 
 from app.core.errors import AppError
-from app.integrations.cerebras import CerebrasClient, CerebrasError
+from app.integrations.vision import VisionModel, VisionModelError
 from app.schemas.triage import ResponseLanguage, SourceKind, TriageResponse
 from app.services.triage.ai import LANGUAGE_NAMES, strict_json_schema
 
@@ -184,7 +184,7 @@ def _apply(
 
 
 class TriageTranslator:
-    def __init__(self, client: CerebrasClient, *, attempts: int = 2) -> None:
+    def __init__(self, client: VisionModel, *, attempts: int = 2) -> None:
         self._client = client
         self._attempts = attempts
 
@@ -222,7 +222,7 @@ class TriageTranslator:
                 last_error = "translation changed the result structure"
             except ValidationError as exc:
                 last_error = f"invalid translation output ({exc.error_count()} errors)"
-            except CerebrasError as exc:
+            except VisionModelError as exc:
                 last_error = str(exc)
                 if "timed out" in last_error:
                     break

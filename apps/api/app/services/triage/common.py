@@ -1,6 +1,7 @@
 """Evidence and provenance shared by every triage engine."""
 
 from app.models.report import FarmerReport
+from app.schemas.satellite import SatelliteAnalysis, SatelliteLimitation, SatelliteStatus
 from app.schemas.triage import (
     DataSource,
     DataSourceStatus,
@@ -128,15 +129,9 @@ def farmer_report_evidence(report: FarmerReport) -> Evidence:
 
 
 def not_integrated_evidence(
-    *, include_weather: bool = True, include_references: bool = True
+    *, include_weather: bool = True, include_references: bool = True, include_satellite: bool = True
 ) -> list[Evidence]:
     evidence = [
-        Evidence(
-            id="ev_satellite",
-            source=SourceKind.SATELLITE,
-            availability=EvidenceAvailability.NOT_INTEGRATED,
-            observation="No satellite vegetation data was retrieved.",
-        ),
         Evidence(
             id="ev_knowledge",
             source=SourceKind.KNOWLEDGE_BASE,
@@ -144,6 +139,16 @@ def not_integrated_evidence(
             observation="No agricultural guidance was retrieved; no sources are cited.",
         ),
     ]
+    if include_satellite:
+        evidence.insert(
+            0,
+            Evidence(
+                id="ev_satellite",
+                source=SourceKind.SATELLITE,
+                availability=EvidenceAvailability.NOT_INTEGRATED,
+                observation="No satellite vegetation data was retrieved.",
+            ),
+        )
     if include_references:
         evidence.append(
             Evidence(
@@ -259,16 +264,9 @@ def reference_source(report: FarmerReport) -> DataSource:
 
 
 def not_integrated_sources(
-    *, include_weather: bool = True, include_references: bool = True
+    *, include_weather: bool = True, include_references: bool = True, include_satellite: bool = True
 ) -> list[DataSource]:
     sources = [
-        DataSource(
-            id="src_satellite",
-            name="Satellite vegetation indices",
-            kind=SourceKind.SATELLITE,
-            status=DataSourceStatus.NOT_INTEGRATED,
-            description="Planned for Milestone 3.",
-        ),
         DataSource(
             id="src_knowledge",
             name="Agricultural knowledge base",
@@ -277,6 +275,17 @@ def not_integrated_sources(
             description="Planned for Milestone 4.",
         ),
     ]
+    if include_satellite:
+        sources.insert(
+            0,
+            DataSource(
+                id="src_satellite",
+                name="Satellite vegetation indices",
+                kind=SourceKind.SATELLITE,
+                status=DataSourceStatus.NOT_INTEGRATED,
+                description="Satellite vegetation evidence is not enabled for this mode.",
+            ),
+        )
     if include_references:
         sources.append(
             DataSource(
@@ -299,3 +308,100 @@ def not_integrated_sources(
             ),
         )
     return sources
+
+
+_SATELLITE_LIMITATION_TEXT: dict[SatelliteLimitation, str] = {
+    SatelliteLimitation.APPROXIMATE_AREA: (
+        "sampled from a circle around the given point, not an exact field boundary"
+    ),
+    SatelliteLimitation.APPROXIMATE_LOCATION: (
+        "the location was only approximate (~1 km), so this describes the surrounding area, "
+        "not necessarily this field"
+    ),
+    SatelliteLimitation.NO_BASELINE: "no clear earlier scene to compare against",
+    SatelliteLimitation.SINGLE_OBSERVATION: "only one clear recent scene",
+    SatelliteLimitation.PARTIAL_COVERAGE: "part of the area was hidden by cloud or shadow",
+    SatelliteLimitation.STALE_OBSERVATION: "the latest clear scene is several weeks old",
+    SatelliteLimitation.LOW_VEGETATION: (
+        "low green cover, which can be bare soil, a harvested field or a young crop rather "
+        "than stress"
+    ),
+}
+
+
+def satellite_summary(satellite: SatelliteAnalysis) -> str | None:
+    """Plain-English summary of measured values for the model prompt and evidence list."""
+    if satellite.status != SatelliteStatus.AVAILABLE or satellite.ndvi is None:
+        return None
+    area = (
+        f"{satellite.buffer_m} m circle around the point"
+        if satellite.buffer_m
+        else "the supplied field boundary"
+    )
+    parts = [
+        f"Latest clear Sentinel-2 scene {satellite.observation_date} "
+        f"({satellite.observation_age_days} days before analysis), {area}: "
+        f"NDVI {satellite.ndvi:.2f}"
+        + (f", NDMI {satellite.ndmi:.2f}" if satellite.ndmi is not None else "")
+        + (
+            f", {satellite.valid_pixel_coverage:.0%} of the area cloud-free"
+            if satellite.valid_pixel_coverage is not None
+            else ""
+        )
+        + "."
+    ]
+    recent, baseline = satellite.recent_window, satellite.baseline_window
+    if recent and baseline and satellite.ndvi_change is not None:
+        parts.append(
+            f"Median NDVI {recent.ndvi_median} over {recent.start}–{recent.end} "
+            f"({recent.clear_observations} clear scenes) vs {baseline.ndvi_median} over "
+            f"{baseline.start}–{baseline.end} ({baseline.clear_observations} clear scenes): "
+            f"change {satellite.ndvi_change:+.2f} ({satellite.trend.value})."
+        )
+        if satellite.ndmi_change is not None:
+            parts.append(
+                f"NDMI change {satellite.ndmi_change:+.2f} ({satellite.ndmi_trend.value})."
+            )
+    if satellite.limitations:
+        notes = "; ".join(_SATELLITE_LIMITATION_TEXT[item] for item in satellite.limitations)
+        parts.append(f"Limitations: {notes}.")
+    return " ".join(parts)
+
+
+def satellite_evidence(report: FarmerReport) -> Evidence:
+    satellite = report.satellite
+    summary = satellite_summary(satellite) if satellite else None
+    if satellite is None or summary is None:
+        return Evidence(
+            id="ev_satellite",
+            source=SourceKind.SATELLITE,
+            availability=EvidenceAvailability.UNAVAILABLE,
+            observation=(satellite.message if satellite and satellite.message else None)
+            or "No satellite vegetation data was retrieved. Do not assume the crop canopy "
+            "is normal.",
+        )
+    return Evidence(
+        id="ev_satellite",
+        source=SourceKind.SATELLITE,
+        availability=EvidenceAvailability.AVAILABLE,
+        observation=f"Satellite measurements (vegetation indices, not a diagnosis): {summary}",
+    )
+
+
+def satellite_source(report: FarmerReport) -> DataSource:
+    satellite = report.satellite
+    used = satellite is not None and satellite.status == SatelliteStatus.AVAILABLE
+    return DataSource(
+        id="src_satellite",
+        name="Google Earth Engine / Sentinel-2",
+        kind=SourceKind.SATELLITE,
+        status=DataSourceStatus.USED if used else DataSourceStatus.UNAVAILABLE,
+        description=(
+            "Cloud-masked Sentinel-2 NDVI (greenness) and NDMI (moisture) with a trend "
+            "versus the previous window."
+            if used
+            else (satellite.message if satellite and satellite.message else None)
+            or "No satellite vegetation data was retrieved."
+        ),
+        retrieved_at=satellite.retrieved_at if satellite and used else None,
+    )

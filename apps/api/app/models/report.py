@@ -8,6 +8,7 @@ from datetime import datetime
 
 from app.models.references import ReferenceVotes
 from app.models.weather import RecentWeather
+from app.schemas.satellite import SatelliteAnalysis
 from app.schemas.triage import Crop, ResponseLanguage, SymptomDuration
 
 
@@ -36,3 +37,4 @@ class FarmerReport:
     weather_unavailable_reason: str | None = None
     references: ReferenceVotes | None = None
     references_unavailable_reason: str | None = None
+    satellite: SatelliteAnalysis | None = None

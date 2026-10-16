@@ -4,8 +4,8 @@ import { PillLink } from "@/components/brand/pill";
 import { Reveal } from "@/components/motion/reveal";
 import { ActionList } from "@/components/triage/action-list";
 import { CropCheck } from "@/components/triage/crop-check";
+import { FieldConditions } from "@/components/triage/field-conditions";
 import { PossibleCauses } from "@/components/triage/possible-causes";
-import { QuickChecks } from "@/components/triage/quick-checks";
 import { ResultTabs } from "@/components/triage/result-tabs";
 import { SummaryCard } from "@/components/triage/summary-card";
 import type { TriageResponse } from "@/types/triage";
@@ -32,6 +32,8 @@ export function TriageResult({ result }: { result: TriageResponse }) {
             </div>
           ) : null}
 
+          <FieldConditions result={result} />
+
           <ResultTabs
             tabs={[
               {
@@ -39,10 +41,7 @@ export function TriageResult({ result }: { result: TriageResponse }) {
                 label: t("causes"),
                 count: result.possible_causes.length,
                 content: (
-                  <div className="space-y-7">
-                    <PossibleCauses causes={result.possible_causes} referenceWeight={result.reference_weight ?? null} />
-                    <QuickChecks items={result.missing_information} />
-                  </div>
+                  <PossibleCauses causes={result.possible_causes} referenceWeight={result.reference_weight ?? null} />
                 ),
               },
               {

@@ -4,19 +4,29 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from app.api.deps import SettingsDep, get_triage_service, get_triage_translator
+from app.api.deps import (
+    SatelliteServiceDep,
+    SettingsDep,
+    WeatherClientDep,
+    get_crop_identifier,
+    get_triage_service,
+    get_triage_translator,
+)
 from app.core.errors import AppError
 from app.models.report import FarmerReport
 from app.schemas.errors import ErrorDetail, ErrorResponse
 from app.schemas.triage import (
     Crop,
+    CropIdentification,
     ResponseLanguage,
     SymptomDuration,
     TranslateTriageRequest,
     TriageResponse,
 )
 from app.services.image_validation import read_validated_images
+from app.services.satellite import coordinates_look_rounded
 from app.services.triage import TriageService
+from app.services.triage.identify import CropIdentifier
 from app.services.triage.translate import TriageTranslator
 
 logger = logging.getLogger(__name__)
@@ -38,6 +48,42 @@ _TRANSLATE_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
+def _require_coordinate_pair(latitude: float | None, longitude: float | None) -> None:
+    if (latitude is None) != (longitude is None):
+        missing = "longitude" if longitude is None else "latitude"
+        message = "Add both latitude and longitude, or leave both empty."
+        raise AppError(
+            422,
+            "validation_error",
+            "Some fields are missing or invalid.",
+            [ErrorDetail(field=missing, message=message)],
+        )
+
+
+@router.post("/triage/identify", responses=_ERROR_RESPONSES)
+async def identify_crop(
+    settings: SettingsDep,
+    identifier: Annotated[CropIdentifier, Depends(get_crop_identifier)],
+    satellite: SatelliteServiceDep,
+    weather: WeatherClientDep,
+    images: Annotated[list[UploadFile] | None, File(description="1-3 JPEG/PNG/WebP photos")] = None,
+    latitude: Annotated[float | None, Form(ge=-90, le=90, allow_inf_nan=False)] = None,
+    longitude: Annotated[float | None, Form(ge=-180, le=180, allow_inf_nan=False)] = None,
+) -> CropIdentification:
+    """Stage 1: identify the crop. Coordinates, if sent, warm weather and satellite caches."""
+    _require_coordinate_pair(latitude, longitude)
+    validated_images = await read_validated_images(
+        images or [],
+        max_images=settings.max_images,
+        max_image_bytes=settings.max_image_bytes,
+    )
+    if latitude is not None and longitude is not None:
+        weather.prefetch(latitude, longitude)
+        if not coordinates_look_rounded(latitude, longitude):
+            satellite.prefetch(latitude, longitude)
+    return await identifier.identify(validated_images)
+
+
 @router.post("/triage", responses=_ERROR_RESPONSES)
 async def create_triage(
     settings: SettingsDep,
@@ -51,15 +97,7 @@ async def create_triage(
     location_label: Annotated[str | None, Form(max_length=120)] = None,
     response_language: Annotated[ResponseLanguage, Form()] = ResponseLanguage.ENGLISH,
 ) -> TriageResponse:
-    if (latitude is None) != (longitude is None):
-        missing = "longitude" if longitude is None else "latitude"
-        message = "Add both latitude and longitude, or leave both empty."
-        raise AppError(
-            422,
-            "validation_error",
-            "Some fields are missing or invalid.",
-            [ErrorDetail(field=missing, message=message)],
-        )
+    _require_coordinate_pair(latitude, longitude)
     validated_images = await read_validated_images(
         images or [],
         max_images=settings.max_images,

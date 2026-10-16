@@ -1,18 +1,27 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { Camera, X } from "lucide-react";
+import { Camera, ImagePlus, Leaf, Maximize, SunMedium, X, type LucideIcon } from "lucide-react";
 
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 
+const TIPS: { icon: LucideIcon; key: TranslationKey }[] = [
+  { icon: SunMedium, key: "daylight" },
+  { icon: Maximize, key: "fillFrame" },
+  { icon: Leaf, key: "includeHealthy" },
+];
+
 export function CameraCapture({
   onCapture,
   onClose,
+  onChooseFiles,
 }: {
   onCapture: (file: File) => void;
   onClose: () => void;
+  onChooseFiles: () => void;
 }) {
   const { t } = useI18n();
   const video = useRef<HTMLVideoElement>(null);
@@ -72,7 +81,7 @@ export function CameraCapture({
     );
   };
 
-  return (
+  return createPortal(
     <motion.div
       role="dialog"
       aria-modal="true"
@@ -96,9 +105,19 @@ export function CameraCapture({
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4">
         {error ? (
-          <p role="alert" className="max-w-sm text-center text-mint-100/90">
-            {error}
-          </p>
+          <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+            <p role="alert" className="text-mint-100/90">
+              {error}
+            </p>
+            <button
+              type="button"
+              onClick={onChooseFiles}
+              className="inline-flex min-h-12 items-center gap-2 rounded-full bg-mint-100 px-5 text-sm font-medium text-forest-900 active:scale-[0.98]"
+            >
+              <ImagePlus className="size-4" aria-hidden />
+              {t("chooseFiles")}
+            </button>
+          </div>
         ) : (
           <>
             <video
@@ -117,9 +136,20 @@ export function CameraCapture({
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-2 px-4 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="flex flex-col items-center gap-4 px-4 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         {!error ? (
           <>
+            <ul className="flex flex-wrap justify-center gap-2">
+              {TIPS.map(({ icon: Icon, key }) => (
+                <li
+                  key={key}
+                  className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs text-mint-100/90"
+                >
+                  <Icon className="size-3.5" aria-hidden />
+                  {t(key)}
+                </li>
+              ))}
+            </ul>
             <button
               ref={shutter}
               type="button"
@@ -130,10 +160,10 @@ export function CameraCapture({
             >
               <Camera className="size-7" aria-hidden />
             </button>
-            <p className="text-sm text-mint-200/70">{t("holdSteady")}</p>
           </>
         ) : null}
       </div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
