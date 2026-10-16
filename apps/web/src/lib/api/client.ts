@@ -2,6 +2,7 @@ import type { ReportFormValues } from "@/lib/schemas/report";
 import type { ApiErrorBody, CropIdentification, TriageResponse } from "@/types/triage";
 import type { LocationOption } from "@/types/location";
 import type { Language } from "@/lib/i18n";
+import { fileExtension } from "@/lib/voice/audio";
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
@@ -152,4 +153,84 @@ export async function searchLocations(query: string, signal: AbortSignal): Promi
     throw new Error("Unexpected location search response");
   }
   return result.locations as LocationOption[];
+}
+
+const TRANSCRIBE_TIMEOUT_MS = 45_000;
+
+export type TranscriptionFailure =
+  | "unavailable"
+  | "no-speech"
+  | "invalid-audio"
+  | "timeout"
+  | "network"
+  | "failed";
+
+export class TranscriptionError extends Error {
+  constructor(
+    readonly reason: TranscriptionFailure,
+    message: string,
+  ) {
+    super(message);
+    this.name = "TranscriptionError";
+  }
+}
+
+export interface Transcription {
+  transcript: string;
+  language: string;
+}
+
+const TRANSCRIPTION_REASONS: Record<string, TranscriptionFailure> = {
+  transcription_unavailable: "unavailable",
+  no_speech_detected: "no-speech",
+  empty_audio: "no-speech",
+  unsupported_audio_type: "invalid-audio",
+  audio_too_large: "invalid-audio",
+  transcription_timeout: "timeout",
+};
+
+function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const timeout = AbortSignal.timeout(ms);
+  return signal && typeof AbortSignal.any === "function" ? AbortSignal.any([signal, timeout]) : (signal ?? timeout);
+}
+
+/** Speech to text for the optional description. Aborting `signal` rejects with an AbortError. */
+export async function transcribeAudio(
+  audio: Blob,
+  language: string,
+  signal?: AbortSignal,
+): Promise<Transcription> {
+  const form = new FormData();
+  form.append("audio", audio, `voice-note.${fileExtension(audio.type)}`);
+  form.append("language", language);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/transcribe`, {
+      method: "POST",
+      body: form,
+      signal: withTimeout(signal, TRANSCRIBE_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new TranscriptionError("timeout", "Transcription took too long.");
+    }
+    throw new TranscriptionError("network", `Can't reach the RootCause service at ${API_BASE_URL}.`);
+  }
+
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const code = isApiErrorBody(body) ? body.error.code : "";
+    const message = isApiErrorBody(body) ? body.error.message : `HTTP ${response.status}`;
+    throw new TranscriptionError(TRANSCRIPTION_REASONS[code] ?? "failed", message);
+  }
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !("transcript" in body) ||
+    typeof body.transcript !== "string"
+  ) {
+    throw new TranscriptionError("failed", "Unexpected transcription response.");
+  }
+  return body as Transcription;
 }

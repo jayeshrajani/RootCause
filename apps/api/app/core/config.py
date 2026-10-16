@@ -64,6 +64,25 @@ class Settings(BaseSettings):
     satellite_stale_days: int = Field(default=20, ge=5, le=120)
     satellite_cache_ttl_seconds: int = Field(default=6 * 3600, ge=0)
 
+    # Voice input (Google Cloud Speech-to-Text V2). Project defaults to GOOGLE_CLOUD_PROJECT_ID;
+    # credentials come from ADC / the attached service account, never from files in Git.
+    speech_enabled: bool = True
+    speech_project_id: str | None = None
+    speech_location: str = Field(default="us", pattern=r"^[a-z0-9-]{2,32}$")
+    speech_model: str = "chirp_3"
+    # Chirp 3 GA locales; ta-IN, te-IN, mr-IN, bn-IN, gu-IN, kn-IN, ml-IN are Preview only.
+    speech_languages: list[str] = Field(default_factory=lambda: ["en-IN", "hi-IN"])
+    speech_timeout_seconds: float = Field(default=30, gt=0, le=120)
+    max_audio_bytes: int = Field(default=5 * MEBIBYTE, ge=1024, le=8 * MEBIBYTE)
+
+    @property
+    def speech_project(self) -> str | None:
+        return self.speech_project_id or self.google_cloud_project_id
+
+    @property
+    def speech_configured(self) -> bool:
+        return self.speech_enabled and bool(self.speech_project)
+
     @property
     def satellite_configured(self) -> bool:
         return self.satellite_enabled and bool(self.google_cloud_project_id)

@@ -1,13 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { Check, Mic } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { CropPicker } from "@/components/farmer/crop-picker";
 import { AdditionalDetails } from "@/components/farmer/steps/describe-step";
 import { LocationStatus, useFieldLocation } from "@/components/farmer/steps/location-step";
 import { PhotoStep } from "@/components/farmer/steps/photo-step";
+import { VoiceInput } from "@/components/farmer/voice-input";
 import { FieldMessage } from "@/components/forms/text-field";
 import type { ReportFormInput } from "@/lib/schemas/report";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,15 @@ export function CropStep() {
   const { control, setValue, formState } = useFormContext<ReportFormInput>();
   const crop = useWatch({ control, name: "crop" });
   const location = useFieldLocation();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const reviewTranscript = () => {
+    setDetailsOpen(true);
+    // Wait for the details panel to expand, then bring the editable text into view.
+    window.setTimeout(() => {
+      document.getElementById("description")?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }, 450);
+  };
 
   const choose = (value: ReportFormInput["crop"]) => {
     setValue("crop", value, { shouldDirty: true, shouldValidate: true });
@@ -71,27 +81,12 @@ export function CropStep() {
         </Part>
 
         <Part n={3} title="Tell us what you see">
-        <button
-          type="button"
-          disabled
-          aria-describedby="voice-soon"
-          className="flex min-h-16 w-full cursor-not-allowed items-center gap-4 rounded-lg border border-forest-900/15 bg-white/60 p-4 text-left"
-        >
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-forest-900/10 text-forest-900/50">
-            <Mic className="size-5" aria-hidden />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block font-medium text-forest-900/70">Record a voice note</span>
-            <span id="voice-soon" className="block text-sm text-muted-foreground">
-              Speak in your language. Coming soon.
-            </span>
-          </span>
-        </button>
+          <VoiceInput onTranscribed={reviewTranscript} />
         </Part>
       </div>
 
       <div className="min-w-0 md:col-span-2">
-        <AdditionalDetails location={location} />
+        <AdditionalDetails location={location} open={detailsOpen} onOpenChange={setDetailsOpen} />
       </div>
     </div>
   );

@@ -4,9 +4,11 @@ from fastapi import Depends, Request
 
 from app.core.config import Settings, get_settings
 from app.integrations.cerebras import CerebrasClient
+from app.integrations.google_speech import GoogleSpeechClient
 from app.integrations.open_meteo import OpenMeteoClient
 from app.integrations.vision import VisionModel
 from app.services.satellite import SatelliteService
+from app.services.transcription import TranscriptionService
 from app.services.triage import AiTriageService, MockTriageService, TriageService
 from app.services.triage.identify import CropIdentifier, CropSimilaritySource
 from app.services.triage.references import ReferenceProvider
@@ -86,3 +88,27 @@ def get_crop_identifier(
 def get_triage_translator(settings: SettingsDep) -> TriageTranslator | None:
     client = vision_model(settings)
     return TriageTranslator(client) if client is not None else None
+
+
+_speech_clients: dict[tuple[str, str, str, float], GoogleSpeechClient] = {}
+
+
+def get_transcription_service(settings: SettingsDep) -> TranscriptionService:
+    project = settings.speech_project
+    if not settings.speech_configured or project is None:
+        return TranscriptionService(None)
+    key = (
+        project,
+        settings.speech_location,
+        settings.speech_model,
+        settings.speech_timeout_seconds,
+    )
+    if key not in _speech_clients:
+        # One client per configuration, so ADC credentials and tokens are reused across requests.
+        _speech_clients[key] = GoogleSpeechClient(
+            project_id=project,
+            location=settings.speech_location,
+            model=settings.speech_model,
+            timeout_seconds=settings.speech_timeout_seconds,
+        )
+    return TranscriptionService(_speech_clients[key])

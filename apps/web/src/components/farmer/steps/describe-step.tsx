@@ -27,10 +27,23 @@ function togglePhrase(text: string, phrase: string): string {
   return text.trim() ? `${text.trim()} ${sentence}` : sentence;
 }
 
-export function AdditionalDetails({ location }: { location: FieldLocation }) {
+export function AdditionalDetails({
+  location,
+  open: openProp,
+  onOpenChange,
+}: {
+  location: FieldLocation;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const { register, control, setValue, formState } = useFormContext<ReportFormInput>();
   const [description, duration] = useWatch({ control, name: ["description", "symptom_duration"] });
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    if (openProp === undefined) setOpenState(next);
+    onOpenChange?.(next);
+  };
   const errors = formState.errors;
   const error = errors.description?.message;
   const isOpen = open || DETAIL_FIELDS.some((f) => f in errors);
@@ -39,7 +52,7 @@ export function AdditionalDetails({ location }: { location: FieldLocation }) {
     <section className="rounded-lg border border-forest-900/10 bg-white/50">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
         aria-expanded={isOpen}
         aria-controls="additional-details"
         className="flex min-h-16 w-full items-center gap-4 p-4 text-left"
