@@ -148,8 +148,12 @@ zero cost.
 - Firebase ID-token verification end to end.
 - Frontend hosting choice (section 11).
 - Gemini/ADK use of retrieved references (Jayesh).
-- Live Speech-to-Text: `en-IN` and `hi-IN` recordings from Chrome/Android (WebM/Opus) and Safari/iOS
-  (WAV fallback); latency; credentials via ADC and via the Cloud Run service account.
+- Live Speech-to-Text: `en-IN` and `hi-IN` recordings from the initial targets, Chrome desktop and
+  Chrome on Android (WebM/Opus); latency; credentials via ADC and via the Cloud Run service account.
+  iOS/Safari (WAV fallback) testing is deferred.
+- Abuse protection for `POST /transcribe` before any public deployment: it currently has no
+  authentication or rate limiting, and every call is billed Speech-to-Text usage. Options: Firebase
+  ID-token check, per-user/IP rate limits, App Check, and a budget alert on the project.
 
 ## 10. Needs GCP credentials or cloud access
 

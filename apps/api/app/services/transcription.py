@@ -22,7 +22,8 @@ MIN_AUDIO_BYTES = 512
 def detect_audio_type(data: bytes) -> str | None:
     """Identify the recording format from its magic bytes; the client content type is ignored.
 
-    Only containers Speech-to-Text V2 auto-decodes are accepted (MP4/AAC and MP3 are not).
+    Accepts the formats our target browsers record (WebM/Ogg Opus) plus WAV and FLAC. Speech-to-Text
+    V2 can also decode MP3 and MP4/M4A (AAC); those are not accepted here yet.
     """
     if data.startswith(b"\x1aE\xdf\xa3"):
         return "audio/webm"

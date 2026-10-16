@@ -2,6 +2,7 @@ import { vi } from "vitest";
 
 export class FakeMediaRecorder {
   static instances: FakeMediaRecorder[] = [];
+  static chunkBytes = 2048;
   static isTypeSupported = (type: string) => type === "audio/webm;codecs=opus";
 
   state: "inactive" | "recording" = "inactive";
@@ -26,7 +27,8 @@ export class FakeMediaRecorder {
 
   stop(): void {
     this.state = "inactive";
-    this.ondataavailable?.({ data: new Blob([new Uint8Array(2048)], { type: this.mimeType }) });
+    const bytes = new Uint8Array(FakeMediaRecorder.chunkBytes);
+    this.ondataavailable?.({ data: new Blob([bytes], { type: this.mimeType }) });
     this.onstop?.();
   }
 }
@@ -63,10 +65,12 @@ export function installFakeMedia(
   options: {
     recorder?: boolean;
     audioContext?: boolean;
+    /** Bytes MediaRecorder delivers on stop; 0 simulates a recording with no audio. */
+    chunkBytes?: number;
     getUserMedia?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
   } = {},
 ) {
-  const { recorder = true, audioContext = false } = options;
+  const { recorder = true, audioContext = false, chunkBytes = 2048 } = options;
   const track = { stop: vi.fn() };
   const stream = { getTracks: () => [track] } as unknown as MediaStream;
   const getUserMedia = vi.fn(options.getUserMedia ?? (async () => stream));
@@ -75,6 +79,7 @@ export function installFakeMedia(
     value: { getUserMedia },
   });
   FakeMediaRecorder.instances = [];
+  FakeMediaRecorder.chunkBytes = chunkBytes;
   FakeAudioContext.instances = [];
   vi.stubGlobal("MediaRecorder", recorder ? FakeMediaRecorder : undefined);
   vi.stubGlobal("AudioContext", audioContext ? FakeAudioContext : undefined);

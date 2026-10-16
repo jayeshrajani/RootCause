@@ -24,6 +24,7 @@ const RECORDER_MESSAGES: Record<RecorderError, TranslationKey> = {
   permission: "voicePermission",
   "no-microphone": "voiceNoMic",
   busy: "voiceMicBusy",
+  empty: "voiceEmpty",
   failed: "voiceFailed",
 };
 
@@ -52,9 +53,9 @@ const primaryButton =
 export function VoiceInput({ onTranscribed }: { onTranscribed?: () => void }) {
   const { t, language } = useI18n();
   const { getValues, setValue } = useFormContext<ReportFormInput>();
-  const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>(() =>
-    speechLanguageFor(language),
-  );
+  // Follows the interface language (which settles after hydration) until the farmer picks one.
+  const [pickedLanguage, setPickedLanguage] = useState<SpeechLanguage | null>(null);
+  const speechLanguage = pickedLanguage ?? speechLanguageFor(language);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const lastAudio = useRef<Blob | null>(null);
   const request = useRef<AbortController | null>(null);
@@ -131,7 +132,7 @@ export function VoiceInput({ onTranscribed }: { onTranscribed?: () => void }) {
             lang={code}
             aria-pressed={speechLanguage === code}
             disabled={busy}
-            onClick={() => setSpeechLanguage(code)}
+            onClick={() => setPickedLanguage(code)}
             className={cn(
               "inline-flex h-9 items-center rounded-full border px-3.5 text-sm transition-colors disabled:opacity-60",
               speechLanguage === code

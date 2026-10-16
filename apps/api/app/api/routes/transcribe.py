@@ -37,7 +37,12 @@ async def transcribe(
     settings: SettingsDep,
     service: Annotated[TranscriptionService, Depends(get_transcription_service)],
     audio: Annotated[
-        UploadFile | None, File(description="Recording up to 60 s: WebM/Ogg (Opus), WAV or FLAC")
+        UploadFile | None,
+        File(
+            description=(
+                "Recording under 1 minute (the app stops at 55 s): WebM/Ogg (Opus), WAV or FLAC"
+            )
+        ),
     ] = None,
     language: Annotated[str | None, Form(max_length=20)] = None,
 ) -> TranscriptionResponse:

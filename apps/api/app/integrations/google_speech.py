@@ -112,7 +112,6 @@ class GoogleSpeechClient:
                 "autoDecodingConfig": {},
                 "languageCodes": [language_code],
                 "model": self.model,
-                "features": {"enableAutomaticPunctuation": True},
             },
             "content": base64.b64encode(audio).decode("ascii"),
         }

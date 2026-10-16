@@ -261,7 +261,7 @@ the report's `description` field for the farmer to review and edit; it is not st
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
-| `audio` | file | yes | ≤ 5 MB (about 60 s); WebM/Ogg (Opus), WAV or FLAC by file signature. MP4/AAC and MP3 are rejected |
+| `audio` | file | yes | ≤ 5 MB and under 1 minute (Speech-to-Text's synchronous limit; the web app stops at 55 s); WebM/Ogg (Opus), WAV or FLAC by file signature. Speech-to-Text V2 can also decode MP3 and MP4/M4A (AAC), but this API does not accept them yet |
 | `language` | string | yes | One of `ROOTCAUSE_SPEECH_LANGUAGES` (default `en-IN`, `hi-IN`) |
 
 200 response: `{ "transcript": "मेरे टमाटर के पत्ते पीले हो रहे हैं", "language": "hi-IN" }`
@@ -276,3 +276,7 @@ the report's `description` field for the farmer to review and edit; it is not st
 | 502 | `transcription_failed` | Provider error or unexpected response |
 | 503 | `transcription_unavailable` | No project configured, or Google credentials missing/rejected |
 | 504 | `transcription_timeout` | Provider timed out (`ROOTCAUSE_SPEECH_TIMEOUT_SECONDS`) |
+
+Initial browser targets are Chrome desktop and Chrome on Android (WebM/Opus). iOS/Safari (WAV
+fallback) is not yet tested. The endpoint has no authentication or rate limiting yet; abuse
+protection is required before public deployment (see [cloud-readiness.md](cloud-readiness.md)).

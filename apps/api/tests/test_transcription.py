@@ -111,6 +111,7 @@ def test_transcribes_english_with_chirp3(
     assert body["config"]["model"] == "chirp_3"
     assert body["config"]["languageCodes"] == ["en-IN"]
     assert body["config"]["autoDecodingConfig"] == {}
+    assert "features" not in body["config"]
     assert base64.b64decode(body["content"]) == WEBM
 
 

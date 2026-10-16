@@ -51,7 +51,7 @@ describe("VoiceInput", () => {
 
     await user.click(screen.getByRole("button", { name: /record a voice note/i }));
     expect(await screen.findByText("Recording")).toBeTruthy();
-    expect(screen.getByTestId("voice-timer").textContent).toContain("/ 1:00");
+    expect(screen.getByTestId("voice-timer").textContent).toContain("/ 0:55");
     await user.click(screen.getByRole("button", { name: "Stop" }));
 
     await waitFor(() =>
@@ -83,12 +83,59 @@ describe("VoiceInput", () => {
     expect(sentLanguage(fetchMock)).toBe("hi-IN");
   });
 
-  it("defaults to Hindi when the app is in Hindi", () => {
+  it("defaults to Hindi when the app is in Hindi and sends hi-IN", async () => {
     window.localStorage.setItem("rootcause.language", "hi");
+    const user = userEvent.setup();
     installFakeMedia();
+    const fetchMock = respond(200, { transcript: HINDI, language: "hi-IN" });
+    vi.stubGlobal("fetch", fetchMock);
     render(<Harness />);
 
-    expect(screen.getByRole("button", { name: "हिन्दी" }).getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "हिन्दी" }).getAttribute("aria-pressed")).toBe(
+        "true",
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: /^आवाज़ में बताएँ/ }));
+    await user.click(await screen.findByRole("button", { name: "रोकें" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(sentLanguage(fetchMock)).toBe("hi-IN");
+  });
+
+  it("keeps the farmer's spoken-language choice in a Hindi interface", async () => {
+    window.localStorage.setItem("rootcause.language", "hi");
+    const user = userEvent.setup();
+    installFakeMedia();
+    const fetchMock = respond(200, { transcript: "Yellow leaves.", language: "en-IN" });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Harness />);
+
+    const hindi = screen.getByRole("button", { name: "हिन्दी" });
+    await waitFor(() => expect(hindi.getAttribute("aria-pressed")).toBe("true"));
+    const english = screen.getByRole("button", { name: "English" });
+    await user.click(english);
+    await user.click(screen.getByRole("button", { name: /^आवाज़ में बताएँ/ }));
+    await user.click(await screen.findByRole("button", { name: "रोकें" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(sentLanguage(fetchMock)).toBe("en-IN");
+    expect(english.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("explains an empty recording and does not call the API", async () => {
+    const user = userEvent.setup();
+    const { track } = installFakeMedia({ chunkBytes: 0 });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Harness />);
+
+    await recordOnce(user);
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/no sound was recorded/i);
+    expect(track.stop).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /record a voice note|record again/i })).toBeTruthy();
   });
 
   it("explains a blocked microphone and does not call the API", async () => {

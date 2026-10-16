@@ -25,6 +25,43 @@ describe("useVoiceRecorder", () => {
     expect((onRecorded.mock.calls[0][0] as Blob).type).toBe("audio/webm;codecs=opus");
   });
 
+  it("reports an empty recording and still releases the microphone", async () => {
+    const { track } = installFakeMedia({ chunkBytes: 0 });
+    const onRecorded = vi.fn();
+    const { result } = renderHook(() => useVoiceRecorder({ onRecorded }));
+
+    await act(() => result.current.start());
+    act(() => result.current.stop());
+
+    expect(onRecorded).not.toHaveBeenCalled();
+    expect(result.current.error).toBe("empty");
+    expect(result.current.status).toBe("idle");
+    expect(track.stop).toHaveBeenCalled();
+  });
+
+  it("reports an empty WAV fallback recording", async () => {
+    const { track } = installFakeMedia({ recorder: false, audioContext: true });
+    const onRecorded = vi.fn();
+    const { result } = renderHook(() => useVoiceRecorder({ onRecorded }));
+
+    await act(() => result.current.start());
+    act(() => result.current.stop());
+
+    expect(onRecorded).not.toHaveBeenCalled();
+    expect(result.current.error).toBe("empty");
+    expect(track.stop).toHaveBeenCalled();
+  });
+
+  it("does not report an empty recording when cancelled", async () => {
+    installFakeMedia({ chunkBytes: 0 });
+    const { result } = renderHook(() => useVoiceRecorder({ onRecorded: vi.fn() }));
+
+    await act(() => result.current.start());
+    act(() => result.current.cancel());
+
+    expect(result.current.error).toBeNull();
+  });
+
   it("stops automatically at the maximum duration", async () => {
     installFakeMedia();
     const onRecorded = vi.fn();

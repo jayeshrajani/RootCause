@@ -12,7 +12,13 @@ import {
 } from "@/lib/voice/audio";
 
 export type RecorderStatus = "idle" | "requesting" | "recording";
-export type RecorderError = "unsupported" | "permission" | "no-microphone" | "busy" | "failed";
+export type RecorderError =
+  | "unsupported"
+  | "permission"
+  | "no-microphone"
+  | "busy"
+  | "empty"
+  | "failed";
 
 interface Session {
   stream: MediaStream;
@@ -84,6 +90,7 @@ export function useVoiceRecorder({
       release(current);
       setStatus("idle");
       if (samples && samples.length > 0) onRecordedRef.current(encodeWav(samples, WAV_SAMPLE_RATE));
+      else if (keep) setError("empty");
     },
     [release],
   );
@@ -131,8 +138,11 @@ export function useVoiceRecorder({
         recorder.onstop = () => {
           release(current);
           setStatus("idle");
-          if (current.keep && chunks.length > 0) {
+          if (!current.keep) return;
+          if (chunks.length > 0) {
             onRecordedRef.current(new Blob(chunks, { type: recorder.mimeType || recorderType }));
+          } else {
+            setError("empty");
           }
         };
         recorder.onerror = () => {

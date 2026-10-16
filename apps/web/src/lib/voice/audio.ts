@@ -1,7 +1,8 @@
 import { DESCRIPTION_MAX } from "@/lib/constants";
 import type { Language } from "@/lib/i18n";
 
-export const MAX_RECORDING_SECONDS = 60;
+// Stays under Speech-to-Text's 1-minute limit for synchronous recognition, with margin for the stop.
+export const MAX_RECORDING_SECONDS = 55;
 export const WAV_SAMPLE_RATE = 16_000;
 
 /** Offered in the UI. Each code must also be enabled on the API (ROOTCAUSE_SPEECH_LANGUAGES). */
@@ -16,8 +17,8 @@ export function speechLanguageFor(uiLanguage: Language): SpeechLanguage {
   return uiLanguage === "hi" ? "hi-IN" : "en-IN";
 }
 
-// Containers Speech-to-Text V2 decodes. Safari only records audio/mp4 (AAC), which it does not,
-// so browsers without these fall back to WAV captured through the Web Audio API.
+// Opus containers the API accepts (target browsers: Chrome desktop and Android Chrome). Speech-to-Text
+// V2 can also decode MP4/AAC, but the API does not accept it yet; browsers without Opus use WAV.
 const RECORDER_TYPES = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus"] as const;
 
 export function pickRecorderType(isTypeSupported?: (type: string) => boolean): string | null {
