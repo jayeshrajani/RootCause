@@ -83,7 +83,7 @@ farmer to pick from `candidates`. Model failures return `needs_confirmation: tru
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
 | `images` | file (repeat) | **yes** | 1–3 files; JPEG/PNG/WebP by file signature; ≤ 5 MB each |
-| `description` | string | no | ≤ 2000 characters (later: voice transcript) |
+| `description` | string | no | ≤ 2000 characters; typed, or a voice transcript from `POST /transcribe` reviewed by the farmer |
 | `crop` | enum | no | `rice`, `wheat`, `maize`, `cotton`, `sugarcane`, `soybean`, `groundnut`, `chickpea`, `tomato`, `potato`, `onion`, `chilli`, `other` |
 | `symptom_duration` | enum | no | `less_than_3_days`, `3_to_7_days`, `1_to_2_weeks`, `more_than_2_weeks`, `not_sure` |
 | `latitude` | number | no* | −90 to 90, finite |
@@ -250,3 +250,29 @@ browser tab and always translates from the original result.
 | 422 | `validation_error` | Invalid result or unsupported language |
 | 502 | `translation_unavailable` | The AI provider failed or changed the result's structure (after one retry) |
 | 503 | `translation_unavailable` | AI analysis is not configured (mock mode results are English only) |
+
+## `POST /transcribe`
+
+Optional voice input for the symptom description. Google Cloud Speech-to-Text V2 (`chirp_3`).
+The transcript is returned in the spoken language (never translated). The web app inserts it into
+the report's `description` field for the farmer to review and edit; it is not stored by the API.
+
+`Content-Type: multipart/form-data`
+
+| Field | Type | Required | Rules |
+| --- | --- | --- | --- |
+| `audio` | file | yes | ≤ 5 MB (about 60 s); WebM/Ogg (Opus), WAV or FLAC by file signature. MP4/AAC and MP3 are rejected |
+| `language` | string | yes | One of `ROOTCAUSE_SPEECH_LANGUAGES` (default `en-IN`, `hi-IN`) |
+
+200 response: `{ "transcript": "मेरे टमाटर के पत्ते पीले हो रहे हैं", "language": "hi-IN" }`
+
+| Status | `code` | When |
+| --- | --- | --- |
+| 413 | `audio_too_large` | Recording exceeds `ROOTCAUSE_MAX_AUDIO_BYTES` |
+| 415 | `unsupported_audio_type` | Bytes are not WebM, Ogg, WAV or FLAC |
+| 422 | `audio_required` / `empty_audio` | No recording, or a recording with no audio content |
+| 422 | `unsupported_language` | `language` missing or not enabled |
+| 422 | `no_speech_detected` | The provider returned no text |
+| 502 | `transcription_failed` | Provider error or unexpected response |
+| 503 | `transcription_unavailable` | No project configured, or Google credentials missing/rejected |
+| 504 | `transcription_timeout` | Provider timed out (`ROOTCAUSE_SPEECH_TIMEOUT_SECONDS`) |

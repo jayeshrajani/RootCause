@@ -23,7 +23,8 @@ to proceed on a required step).
 | 1F. Firebase readiness | DEFERRED (deployment) | Rendering review done (D4); static-export build test pending |
 | 1G. Integration handoff | COMPLETE | Public API verified end to end for all three crops; HTTP endpoint pending D2 |
 | Tomato retrieval quality | PARTIAL | Investigated; isolated experiments run; no production change yet (needs approval) |
-| Commit and push | BLOCKED | Push needs GitHub access (B7); commits need explicit permission |
+| Voice input (speech-to-text) | PARTIAL | Implemented and tested with mocks (2026-10-16); live Google Speech-to-Text test pending on an unrestricted machine |
+| Commit and push | COMPLETE | `shiv1214` has write access; pushes to `shivansh_dev` only, after approval |
 
 ### Status history
 

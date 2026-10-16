@@ -88,6 +88,7 @@ Firestore holds metadata only. Vectors stay in the FAISS files. Clients get no w
 | `ROOTCAUSE_GCS_ARTIFACT_PREFIX`, `ROOTCAUSE_GCS_DATASET_PREFIX` | Proposed (1D) | Default `artifacts/`, `datasets/` |
 | `GOOGLE_CLOUD_PROJECT` | Proposed (1D) | Project for Firestore/Firebase Admin |
 | `OMP_NUM_THREADS` | Proposed (1E) | Match torch threads to the vCPU count |
+| `ROOTCAUSE_SPEECH_PROJECT_ID`, `ROOTCAUSE_SPEECH_LOCATION`, `ROOTCAUSE_SPEECH_MODEL`, `ROOTCAUSE_SPEECH_LANGUAGES` | Implemented | Voice input; project falls back to `GOOGLE_CLOUD_PROJECT_ID`; `us`, `chirp_3`, `["en-IN","hi-IN"]` by default |
 
 Secrets (e.g. Gemini keys, Jayesh) go in Secret Manager and are exposed to Cloud Run as
 environment variables. Nothing secret uses the `NEXT_PUBLIC_` prefix.
@@ -99,6 +100,7 @@ environment variables. Nothing secret uses the `NEXT_PUBLIC_` prefix.
 | Cloud Run runtime service account (dedicated, not the default compute account) | `roles/storage.objectViewer` | The artifact bucket (or prefixes via IAM conditions) |
 | | `roles/datastore.user` | Only if the backend writes Firestore |
 | | `roles/secretmanager.secretAccessor` | Only the specific secrets it needs |
+| | `roles/speech.client` | Voice input (`POST /transcribe`); Speech-to-Text API enabled in the project |
 | Index publisher (person or CI job) | `roles/storage.objectCreator` | `artifacts/` and `datasets/` (write-once publishes) |
 | | `roles/datastore.user` | Syncing `reference_images` metadata |
 | Cloud Build service account | `roles/artifactregistry.writer` | The backend image repository |
@@ -146,11 +148,13 @@ zero cost.
 - Firebase ID-token verification end to end.
 - Frontend hosting choice (section 11).
 - Gemini/ADK use of retrieved references (Jayesh).
+- Live Speech-to-Text: `en-IN` and `hi-IN` recordings from Chrome/Android (WebM/Opus) and Safari/iOS
+  (WAV fallback); latency; credentials via ADC and via the Cloud Run service account.
 
 ## 10. Needs GCP credentials or cloud access
 
 Confirming the bucket and its layout; enabling APIs (Cloud Run, Artifact Registry, Cloud Build,
-Firestore, Secret Manager); creating service accounts and IAM bindings; uploading artifacts and
+Firestore, Secret Manager, Speech-to-Text); creating service accounts and IAM bindings; uploading artifacts and
 reference images; Firestore setup; building and pushing images; deploying Cloud Run; linking
 Firebase and deploying hosting; creating secrets; enabling billing.
 

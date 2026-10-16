@@ -56,6 +56,7 @@ display name/email (never a password) in `localStorage`.
 | `app/services/image_validation.py` | Count, size and magic-byte type checks |
 | `app/services/triage/` | `TriageService` protocol, `AiTriageService` (Cerebras), `MockTriageService`, translation, and `references.py` (reference-photo votes for evidence-fit scores) |
 | `app/services/retrieval/` | Crop reference retrieval: dataset registry, DINOv2 embeddings, per-crop FAISS indexes ([retrieval.md](retrieval.md)) |
+| `app/services/transcription.py` | Optional voice input: audio/language validation and `POST /transcribe` (Speech-to-Text V2 Chirp 3 via `app/integrations/google_speech.py`) |
 | `scripts/` | Offline tooling: dataset preparation, model fetch, index build, evaluation |
 | `app/integrations/` | Home for external adapters (empty in Milestone 0) |
 
