@@ -1,12 +1,14 @@
 """Google Cloud Speech-to-Text V2 client for short recordings (synchronous `recognize`).
 
 REST rather than the gRPC SDK, so TLS uses the OS certificate store (truststore) like the other
-integrations. Credentials come only from Application Default Credentials.
+integrations. Credentials: saved `earthengine authenticate` login locally, otherwise
+Application Default Credentials (the attached service account in production).
 """
 
 import asyncio
 import base64
 import logging
+import os
 import re
 import ssl
 import threading
@@ -47,9 +49,30 @@ class SpeechRecognizer(Protocol):
     async def recognize(self, audio: bytes, language_code: str) -> SpeechResult: ...
 
 
-def adc_auth_headers() -> AuthHeaders:
-    """Authorization (and quota-project) headers from Application Default Credentials."""
+def _load_credentials(quota_project: str | None) -> Any:
     import google.auth
+
+    try:
+        import ee
+
+        saved = ee.oauth.get_credentials_path()
+    except ImportError:
+        saved = None
+    if saved and os.path.exists(saved):
+        # Saved by `earthengine authenticate` (includes cloud-platform scope); skips
+        # google.auth.default()'s ~12 s metadata-server probe off Google Cloud.
+        # ee validates the login over `requests`, which needs the OS trust store behind TLS proxies.
+        truststore.inject_into_ssl()
+        saved_credentials: Any = ee.data.get_persistent_credentials()
+        if quota_project:
+            return saved_credentials.with_quota_project(quota_project)
+        return saved_credentials
+    credentials, _ = google.auth.default(scopes=[CLOUD_PLATFORM_SCOPE])
+    return credentials
+
+
+def adc_auth_headers(quota_project: str | None = None) -> AuthHeaders:
+    """Authorization (and quota-project) headers from local or default Google credentials."""
     import google.auth.transport.urllib3
     import urllib3
 
@@ -61,7 +84,12 @@ def adc_auth_headers() -> AuthHeaders:
         with lock:
             credentials = state.get("credentials")
             if credentials is None:
-                credentials, _ = google.auth.default(scopes=[CLOUD_PLATFORM_SCOPE])
+                try:
+                    credentials = _load_credentials(quota_project)
+                except Exception as exc:  # ee raises EEException for unusable saved logins
+                    if isinstance(exc, GoogleAuthError):
+                        raise
+                    raise GoogleAuthError(str(exc)) from exc  # type: ignore[no-untyped-call]
                 state["credentials"] = credentials
             if not credentials.valid:
                 credentials.refresh(google.auth.transport.urllib3.Request(http))  # type: ignore[no-untyped-call]
@@ -89,7 +117,7 @@ class GoogleSpeechClient:
         self._project_id = project_id
         self._location = location
         self._timeout = timeout_seconds
-        self._auth_headers = auth_headers or adc_auth_headers()
+        self._auth_headers = auth_headers or adc_auth_headers(project_id)
         self._transport = transport
 
     @property
