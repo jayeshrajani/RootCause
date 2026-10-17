@@ -14,6 +14,7 @@ from app.integrations.earth_engine import EarthEngineClient
 from app.integrations.open_meteo import OpenMeteoClient
 from app.services.satellite import SatelliteService
 from app.services.triage.references import RetrievalReferenceProvider
+from app.services.usage import InvestigationLimiter
 from app.services.weather import CachedWeatherClient
 
 
@@ -63,6 +64,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.satellite_service = satellite
     # Shared so crop identification can warm the weather cache for the following triage.
     app.state.weather_client = CachedWeatherClient(OpenMeteoClient())
+    app.state.investigation_limiter = InvestigationLimiter(
+        session_limit=settings.investigations_per_session,
+        ip_limit_per_hour=settings.investigations_per_ip_hour,
+    )
     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=settings.max_request_bytes)
     # Added last so it is outermost and error responses still carry CORS headers.
     app.add_middleware(

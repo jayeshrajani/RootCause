@@ -2,9 +2,10 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
 from app.api.deps import (
+    InvestigationLimiterDep,
     SatelliteServiceDep,
     SettingsDep,
     WeatherClientDep,
@@ -28,6 +29,7 @@ from app.services.satellite import coordinates_look_rounded
 from app.services.triage import TriageService
 from app.services.triage.identify import CropIdentifier
 from app.services.triage.translate import TriageTranslator
+from app.services.usage import SESSION_HEADER
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,11 @@ _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     415: {"model": ErrorResponse, "description": "Unsupported image type"},
     422: {"model": ErrorResponse, "description": "Invalid or missing fields"},
     502: {"model": ErrorResponse, "description": "Analysis provider unavailable"},
+}
+
+_TRIAGE_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    **_ERROR_RESPONSES,
+    429: {"model": ErrorResponse, "description": "Investigation limit reached for this visit"},
 }
 
 _TRANSLATE_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -84,9 +91,11 @@ async def identify_crop(
     return await identifier.identify(validated_images)
 
 
-@router.post("/triage", responses=_ERROR_RESPONSES)
+@router.post("/triage", responses=_TRIAGE_ERROR_RESPONSES)
 async def create_triage(
+    request: Request,
     settings: SettingsDep,
+    limiter: InvestigationLimiterDep,
     service: Annotated[TriageService, Depends(get_triage_service)],
     images: Annotated[list[UploadFile] | None, File(description="1-3 JPEG/PNG/WebP photos")] = None,
     description: Annotated[str | None, Form(max_length=2000)] = None,
@@ -97,24 +106,28 @@ async def create_triage(
     location_label: Annotated[str | None, Form(max_length=120)] = None,
     response_language: Annotated[ResponseLanguage, Form()] = ResponseLanguage.ENGLISH,
 ) -> TriageResponse:
-    _require_coordinate_pair(latitude, longitude)
-    validated_images = await read_validated_images(
-        images or [],
-        max_images=settings.max_images,
-        max_image_bytes=settings.max_image_bytes,
-    )
-    report = FarmerReport(
-        images=validated_images,
-        received_at=datetime.now(UTC),
-        crop=crop,
-        description=(description or "").strip() or None,
-        latitude=latitude,
-        longitude=longitude,
-        location_label=(location_label or "").strip() or None,
-        symptom_duration=symptom_duration,
-        response_language=response_language,
-    )
-    result = await service.assess(report)
+    with limiter.reserve(
+        session_id=request.headers.get(SESSION_HEADER),
+        ip=request.client.host if request.client else None,
+    ):
+        _require_coordinate_pair(latitude, longitude)
+        validated_images = await read_validated_images(
+            images or [],
+            max_images=settings.max_images,
+            max_image_bytes=settings.max_image_bytes,
+        )
+        report = FarmerReport(
+            images=validated_images,
+            received_at=datetime.now(UTC),
+            crop=crop,
+            description=(description or "").strip() or None,
+            latitude=latitude,
+            longitude=longitude,
+            location_label=(location_label or "").strip() or None,
+            symptom_duration=symptom_duration,
+            response_language=response_language,
+        )
+        result = await service.assess(report)
     logger.info(
         "Triage completed report_id=%s crop=%s images=%d mode=%s status=%s",
         result.report_id,

@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
+    # Investigations (POST /triage) per browser session, plus a per-IP hourly backstop for
+    # clients that rotate the session id. 0 disables a limit.
+    investigations_per_session: int = Field(default=5, ge=0)
+    investigations_per_ip_hour: int = Field(default=60, ge=0)
+
     max_images: int = Field(default=3, ge=1, le=10)
     max_image_bytes: int = Field(default=5 * MEBIBYTE, ge=1)
 

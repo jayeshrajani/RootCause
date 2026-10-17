@@ -25,18 +25,25 @@ class AppError(Exception):
         self.code = code
         self.message = message
         self.details = details or []
+        self.headers: dict[str, str] = {}
 
 
 def error_response(
-    status_code: int, code: str, message: str, details: list[ErrorDetail] | None = None
+    status_code: int,
+    code: str,
+    message: str,
+    details: list[ErrorDetail] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     body = ErrorResponse(error=ErrorBody(code=code, message=message, details=details or []))
-    return JSONResponse(status_code=status_code, content=body.model_dump(mode="json"))
+    return JSONResponse(
+        status_code=status_code, content=body.model_dump(mode="json"), headers=headers
+    )
 
 
 async def _app_error_handler(_: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, AppError)
-    return error_response(exc.status_code, exc.code, exc.message, exc.details)
+    return error_response(exc.status_code, exc.code, exc.message, exc.details, exc.headers)
 
 
 async def _validation_error_handler(_: Request, exc: Exception) -> JSONResponse:

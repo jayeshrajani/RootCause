@@ -15,6 +15,7 @@ from app.services.triage import AiTriageService, MockTriageService, TriageServic
 from app.services.triage.identify import CropIdentifier, CropSimilaritySource
 from app.services.triage.references import ReferenceProvider
 from app.services.triage.translate import TriageTranslator
+from app.services.usage import InvestigationLimiter
 from app.services.weather import CachedWeatherClient
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -26,6 +27,20 @@ def get_weather_client(request: Request) -> CachedWeatherClient:
 
 
 WeatherClientDep = Annotated[CachedWeatherClient, Depends(get_weather_client)]
+
+
+def get_investigation_limiter(request: Request, settings: SettingsDep) -> InvestigationLimiter:
+    limiter: InvestigationLimiter | None = getattr(request.app.state, "investigation_limiter", None)
+    if limiter is None:
+        limiter = InvestigationLimiter(
+            session_limit=settings.investigations_per_session,
+            ip_limit_per_hour=settings.investigations_per_ip_hour,
+        )
+        request.app.state.investigation_limiter = limiter
+    return limiter
+
+
+InvestigationLimiterDep = Annotated[InvestigationLimiter, Depends(get_investigation_limiter)]
 
 
 def get_satellite_service(request: Request) -> SatelliteService:

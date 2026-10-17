@@ -82,6 +82,12 @@ farmer to pick from `candidates`. Model failures return `needs_confirmation: tru
 
 `Content-Type: multipart/form-data`. Only photos are required; everything else sharpens the result.
 
+Each browser session ("visit") gets 5 investigations: the web app sends a random id in the
+`X-RootCause-Session` header (a session cookie). A per-IP cap (60 per hour) backs it up for clients
+that rotate the id. Requests that fail (validation or provider errors) are not counted. Counts are
+in memory per API instance. Configure with `ROOTCAUSE_INVESTIGATIONS_PER_SESSION` and
+`ROOTCAUSE_INVESTIGATIONS_PER_IP_HOUR` (0 disables).
+
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
 | `images` | file (repeat) | **yes** | 1–3 files; JPEG/PNG/WebP by file signature; ≤ 5 MB each |
@@ -233,6 +239,7 @@ Every error uses one envelope:
 | 422 | `validation_error` | Missing or invalid form fields (`details[].field` names the field) |
 | 422 | `images_required` / `too_many_images` / `empty_image` | Photo count or content problems |
 | 500 | `internal_error` | Unexpected server failure |
+| 429 | `investigation_limit` | This visit used its 5 investigations, or the IP's hourly cap was hit (then `Retry-After` is set) |
 | 502 | `analysis_unavailable` | The AI provider failed, timed out or returned invalid output (after one retry). Never silently replaced by mock output |
 
 Submitted values are never echoed in error responses.
