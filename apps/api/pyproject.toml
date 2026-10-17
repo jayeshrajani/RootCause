@@ -18,7 +18,7 @@ dependencies = [
   # Google Earth Engine (Sentinel-2 vegetation evidence); auth via ADC / service account.
   "earthengine-api>=1.7",
   # Application Default Credentials for Speech-to-Text (voice input).
-  "google-auth>=2.30",
+  "google-auth[urllib3]>=2.30",
 ]
 
 [project.optional-dependencies]

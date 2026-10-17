@@ -16,8 +16,7 @@ gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudb
 gcloud artifacts repositories create rootcause --repository-format=docker --location=$REGION
 
 # Dedicated runtime identity (not the default compute account).
-gcloud iam service-accounts create rootcause-api
-SA=rootcause-api@$PROJECT.iam.gserviceaccount.com
+SA=rootcause@$PROJECT.iam.gserviceaccount.com
 gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/speech.client
 gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/serviceusage.serviceUsageConsumer
 gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/earthengine.viewer
@@ -32,7 +31,8 @@ done
 ```
 
 The Cloud Build service account also needs `roles/run.admin`, `roles/iam.serviceAccountUser` on
-`$SA`, and `roles/artifactregistry.writer`.
+`$SA`, and `roles/artifactregistry.writer`. The deployment recipe tags images with the Cloud Build
+`$BUILD_ID`, so it also works when submitting source directly from a local checkout.
 
 ### Reference data bucket (DINOv2 weights + FAISS index + reference photos, ~211 MB)
 
