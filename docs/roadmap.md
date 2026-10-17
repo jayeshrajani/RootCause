@@ -25,7 +25,7 @@ Acceptance criteria
 
 | Work | Owner |
 | --- | --- |
-| Cerebras adapter (OpenAI-compatible API), structured output validated by Pydantic | S |
+| Gemini generateContent adapter with Cerebras fallback; structured output validated by Pydantic | S |
 | Timeouts, malformed-output and API-error handling; fallback to explicit failure, not mock | S |
 | `analysis_mode` + provenance for model output | J+S (contract) |
 | Open-Meteo adapter: recent rainfall, temperature, humidity with real observation periods | S |
@@ -37,6 +37,7 @@ Acceptance criteria
 Acceptance criteria
 
 - With `GEMINI_API_KEY` set, a real photo returns hypotheses that pass schema validation.
+- If Gemini fails and `CEREBRAS_API_KEY` is set, analysis retries through Cerebras.
 - Without a key, the API still works (mock or a clear "analysis unavailable" state).
 - Weather evidence shows the actual period and timestamp; failures appear as `unavailable`.
 - Tests cover malformed model output, timeouts and weather API failure (mocked HTTP).

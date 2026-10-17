@@ -28,9 +28,16 @@ class Settings(BaseSettings):
     max_images: int = Field(default=3, ge=1, le=10)
     max_image_bytes: int = Field(default=5 * MEBIBYTE, ge=1)
 
-    # "auto" uses Cerebras when CEREBRAS_API_KEY is set, otherwise the labelled mock.
-    analysis_provider: Literal["auto", "mock", "cerebras"] = "auto"
+    # "auto" prefers Gemini, then Cerebras, and otherwise uses the labelled mock.
+    analysis_provider: Literal["auto", "mock"] = "auto"
     analysis_timeout_seconds: float = Field(default=45, gt=0)
+
+    gemini_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GEMINI_API_KEY", "ROOTCAUSE_GEMINI_API_KEY"),
+    )
+    gemini_model: str = "gemini-flash-latest"
+    gemini_rate_limit_fallback_model: str = "gemini-3-flash-preview"
 
     cerebras_api_key: SecretStr | None = Field(
         default=None,
@@ -88,10 +95,12 @@ class Settings(BaseSettings):
         return self.satellite_enabled and bool(self.google_cloud_project_id)
 
     @property
+    def use_gemini(self) -> bool:
+        return self.analysis_provider != "mock" and self.gemini_api_key is not None
+
+    @property
     def use_cerebras(self) -> bool:
-        if self.analysis_provider == "cerebras":
-            return True
-        return self.analysis_provider == "auto" and self.cerebras_api_key is not None
+        return self.analysis_provider != "mock" and self.cerebras_api_key is not None
 
     @property
     def max_request_bytes(self) -> int:

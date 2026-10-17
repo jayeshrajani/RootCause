@@ -17,10 +17,12 @@ still be submitted without selecting a match, but weather lookup may not resolve
 ## `GET /health`
 
 ```json
-{ "status": "ok", "service": "rootcause-api", "version": "0.1.0", "analysis_mode": "ai", "model": "qwen-3.8-27b", "reference_photos": "ready" }
+{ "status": "ok", "service": "rootcause-api", "version": "0.1.0", "analysis_mode": "ai", "model": "gemini-flash-latest", "reference_photos": "ready" }
 ```
 
-`analysis_mode` is `ai` when an analysis provider is configured (currently Cerebras), else `mock`.
+`analysis_mode` is `ai` when Gemini or Cerebras is configured, else `mock`. Gemini is used first;
+Cerebras is attempted if Gemini returns a provider error. `model` reports the primary configured
+model.
 `reference_photos` is `disabled` (no `ROOTCAUSE_RETRIEVAL_INDEX_VERSION`), `loading` (model and
 index load in the background for about 30 s after startup), `ready` or `failed`.
 `satellite_imagery` is `configured` when `GOOGLE_CLOUD_PROJECT_ID` is set (credentials are only

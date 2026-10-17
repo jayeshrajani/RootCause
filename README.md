@@ -13,11 +13,10 @@ RootCause is not a disease classifier. It helps a farmer answer:
 Observations, hypotheses, missing evidence and recommendations are always kept separate. Model
 output is never presented as a confirmed diagnosis.
 
-> **Status: photo analysis live.** With `CEREBRAS_API_KEY` set, photos and the farmer's text are
-> analysed by **Qwen 3.8 (27B) on Cerebras**, validated against a strict schema and safety-checked.
-> Without a key the API returns a clearly labelled **mock** (`analysis_mode: "mock"`). Weather,
-> satellite and knowledge sources are not connected yet. Gemini is planned but blocked on the LSEG
-> network. See [docs/roadmap.md](docs/roadmap.md).
+> **Status: photo analysis live.** With `GEMINI_API_KEY` set, photos and the farmer's text are
+> analysed by Gemini Flash and validated against a strict schema. If Gemini is unavailable and
+> `CEREBRAS_API_KEY` is set, Cerebras is used as a fallback. Without either key the API returns a
+> clearly labelled mock (`analysis_mode: "mock"`). See [docs/roadmap.md](docs/roadmap.md).
 
 ## Repository layout
 
@@ -69,8 +68,9 @@ with `NEXT_PUBLIC_API_BASE_URL=...`. If you run the web app on a different port,
 to `ROOTCAUSE_CORS_ORIGINS` in `.env`.
 
 No API keys are required: without one, the API returns labelled mock results. For real photo
-analysis, set `CEREBRAS_API_KEY` in the repo-root `.env` (never commit it) and restart the API;
-`/api/v1/health` then reports `"analysis_mode": "ai"`.
+analysis, set `GEMINI_API_KEY` in the repo-root `.env` (never commit it). Optionally set
+`CEREBRAS_API_KEY` as a fallback, then restart the API; `/api/v1/health` reports the primary
+configured model.
 
 ## Checks (same as CI)
 

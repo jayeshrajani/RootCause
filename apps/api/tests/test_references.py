@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.integrations.cerebras import CerebrasClient
+from app.integrations.gemini import GeminiClient
 from app.main import create_app
 from app.models.references import ReferenceVotes
 from app.schemas.triage import Crop
@@ -84,14 +84,14 @@ def service_with(
         sent.append(json.loads(request.content))
         return queue.pop(0)
 
-    client = CerebrasClient(
-        api_key="test-key", model="qwen-test", transport=httpx.MockTransport(handler)
+    client = GeminiClient(
+        api_key="test-key", model="gemini-test", transport=httpx.MockTransport(handler)
     )
     return AiTriageService(client, reference_provider=provider), sent
 
 
 def prompt_of(sent: list[dict[str, Any]]) -> str:
-    text: str = sent[0]["messages"][1]["content"][0]["text"]
+    text: str = sent[0]["contents"][0]["parts"][0]["text"]
     return text
 
 

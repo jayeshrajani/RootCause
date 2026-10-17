@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_triage_service
 from app.core.config import Settings, get_settings
-from app.integrations.cerebras import CerebrasClient
 from app.integrations.earth_engine import (
     EarthEngineClient,
     EarthEngineError,
@@ -20,6 +19,7 @@ from app.integrations.earth_engine import (
     SceneSeries,
     _classify,
 )
+from app.integrations.gemini import GeminiClient
 from app.main import create_app
 from app.models.report import FarmerReport, ReportImage
 from app.schemas.satellite import (
@@ -438,7 +438,7 @@ def ai_service(
         sent.append(json.loads(request.content))
         return responses.pop(0)
 
-    client = CerebrasClient(api_key="k", model="qwen-test", transport=httpx.MockTransport(handler))
+    client = GeminiClient(api_key="k", model="gemini-test", transport=httpx.MockTransport(handler))
     return (
         AiTriageService(client, weather_client=weather, satellite_service=satellite),
         sent,
@@ -457,7 +457,7 @@ async def test_interpretable_satellite_evidence_feeds_prompt_and_score() -> None
 
     result = await svc.assess(REPORT)
 
-    prompt = sent[0]["messages"][1]["content"][0]["text"]
+    prompt = sent[0]["contents"][0]["parts"][0]["text"]
     assert "Satellite vegetation evidence (Google Earth Engine" in prompt
     assert "Satellite interpretation allowed: yes" in prompt
     cause = result.possible_causes[0]
@@ -476,7 +476,7 @@ async def test_uninterpretable_satellite_is_shown_but_not_scored() -> None:
 
     result = await svc.assess(REPORT)
 
-    assert "Satellite interpretation allowed: no" in sent[0]["messages"][1]["content"][0]["text"]
+    assert "Satellite interpretation allowed: no" in sent[0]["contents"][0]["parts"][0]["text"]
     assert result.possible_causes[0].satellite_score is None
     assert result.possible_causes[0].evidence_fit_score == 80
     assert result.satellite is not None and result.satellite.interpretable is False

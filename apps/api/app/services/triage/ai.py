@@ -280,6 +280,8 @@ _CONFIDENCE_CAP: dict[str, ConfidenceLevel] = {
 }
 _CONFIDENCE_ORDER = [ConfidenceLevel.LOW, ConfidenceLevel.MEDIUM, ConfidenceLevel.HIGH]
 _MAX_CAUSES = 4
+_MIN_CAUSE_FIT = 50
+_DOMINANT_CAUSE_FIT = 75
 _MAX_ITEMS = 5
 # Tuned on held-out field photos with scripts/evaluate_hybrid.py (see docs/retrieval.md).
 REFERENCE_SCORE_WEIGHTS: Mapping[str, int] = {"rice": 30, "potato": 20, "tomato": 10}
@@ -384,7 +386,7 @@ class AiTriageService:
         self,
         client: VisionModel,
         *,
-        provider_label: str = "Cerebras",
+        provider_label: str | None = None,
         clock: Callable[[], datetime] = _utc_now,
         id_factory: Callable[[], str] = _new_report_id,
         attempts: int = 2,
@@ -620,6 +622,12 @@ class AiTriageService:
                 weather_score(item.points) if signal == "weather" else satellite_score(item.points)
             )
 
+        ranked_causes = sorted(scored_causes, key=lambda item: item[0], reverse=True)
+        # Hide weak fits; a strong top match stands alone.
+        ranked_causes = [item for item in ranked_causes if item[0] >= _MIN_CAUSE_FIT]
+        if ranked_causes and ranked_causes[0][0] > _DOMINANT_CAUSE_FIT:
+            ranked_causes = ranked_causes[:1]
+
         causes = [
             PossibleCause(
                 name=c.name,
@@ -636,9 +644,7 @@ class AiTriageService:
                 evidence_fit_score=fit,
                 evidence_ledger=ledger,
             )
-            for fit, ref, key, ledger, c in sorted(
-                scored_causes, key=lambda item: item[0], reverse=True
-            )[:_MAX_CAUSES]
+            for fit, ref, key, ledger, c in ranked_causes[:_MAX_CAUSES]
         ]
         actions = [
             RecommendedAction(
@@ -711,7 +717,8 @@ class AiTriageService:
             or m.urgency in (UrgencyLevel.HIGH, UrgencyLevel.CRITICAL)
             or any(a.requires_expert_verification for a in actions)
         )
-        engine = f"{self._client.model} via {self._provider_label}"
+        provider = getattr(self._client, "provider_label", None) or self._provider_label or "AI"
+        engine = f"{self._client.model} via {provider}"
 
         return TriageResponse(
             report_id=self._id_factory(),

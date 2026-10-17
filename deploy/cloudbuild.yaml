@@ -1,0 +1,66 @@
+# Builds both images and deploys them to Cloud Run. Run from the repo root:
+#   gcloud builds submit --config deploy/cloudbuild.yaml --substitutions=_API_URL=https://<api-url>,_WEB_URL=https://<web-url>
+# _API_URL is baked into the web bundle; _WEB_URL becomes the API's CORS origin.
+substitutions:
+  _REGION: asia-south1
+  _REPO: rootcause
+  _API_SA: rootcause-api
+  _API_URL: ""
+  _WEB_URL: ""
+
+steps:
+  - id: build-api
+    name: gcr.io/cloud-builders/docker
+    args: [build, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA", apps/api]
+  - id: build-web
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=NEXT_PUBLIC_API_BASE_URL=${_API_URL}
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA
+      - apps/web
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA &&
+        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA
+  - id: deploy-api
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - rootcause-api
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
+      - --region=${_REGION}
+      - --service-account=${_API_SA}@$PROJECT_ID.iam.gserviceaccount.com
+      - --allow-unauthenticated
+      - --cpu=1
+      - --memory=1Gi
+      - --concurrency=8
+      - --timeout=60
+      - --cpu-boost
+      - --min-instances=0
+      - '--set-env-vars=^@^GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID@ROOTCAUSE_CORS_ORIGINS=["${_WEB_URL}"]'
+      - --set-secrets=GEMINI_API_KEY=gemini-api-key:latest,CEREBRAS_API_KEY=cerebras-api-key:latest
+  - id: deploy-web
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - rootcause-web
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA
+      - --region=${_REGION}
+      - --allow-unauthenticated
+      - --cpu=1
+      - --memory=512Mi
+      - --min-instances=0
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA

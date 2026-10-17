@@ -14,8 +14,16 @@ async def health(settings: SettingsDep, references: ReferenceProviderDep) -> Hea
         status="ok",
         service="rootcause-api",
         version=__version__,
-        analysis_mode=AnalysisMode.AI if settings.use_cerebras else AnalysisMode.MOCK,
-        model=settings.cerebras_model if settings.use_cerebras else None,
+        analysis_mode=AnalysisMode.AI
+        if settings.use_gemini or settings.use_cerebras
+        else AnalysisMode.MOCK,
+        model=(
+            settings.gemini_model
+            if settings.use_gemini
+            else settings.cerebras_model
+            if settings.use_cerebras
+            else None
+        ),
         reference_photos=references.status if references else "disabled",
         satellite_imagery="configured" if settings.satellite_configured else "disabled",
     )

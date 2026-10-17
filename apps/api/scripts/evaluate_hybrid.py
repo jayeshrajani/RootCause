@@ -1,6 +1,6 @@
 """Tune the reference-photo weight in evidence-fit scores on held-out field photos.
 
-Usage (from apps/api, with retrieval configured and CEREBRAS_API_KEY set):
+Usage (from apps/api, with retrieval configured and a Gemini or Cerebras API key set):
 
     python scripts/evaluate_hybrid.py --per-crop 10
 
@@ -19,9 +19,9 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.api.deps import vision_model
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.integrations.cerebras import CerebrasClient
 from app.models.references import ReferenceVotes
 from app.models.report import FarmerReport, ReportImage
 from app.schemas.triage import Crop
@@ -73,21 +73,17 @@ def top_label(
 async def evaluate(args: argparse.Namespace) -> int:
     settings = Settings()
     data_dir: Path | None = args.data_dir or settings.data_dir
-    if settings.cerebras_api_key is None or data_dir is None:
-        print("Set CEREBRAS_API_KEY and ROOTCAUSE_DATA_DIR (or --data-dir).", file=sys.stderr)
+    if not (settings.use_gemini or settings.use_cerebras) or data_dir is None:
+        print("Set a model API key and ROOTCAUSE_DATA_DIR (or --data-dir).", file=sys.stderr)
         return 2
     provider = RetrievalReferenceProvider(settings)
     provider.load()
     if provider.status != "ready":
         print("Reference library failed to load; see the log above.", file=sys.stderr)
         return 1
-    client = CerebrasClient(
-        api_key=settings.cerebras_api_key.get_secret_value(),
-        model=settings.cerebras_model,
-        base_url=settings.cerebras_base_url,
-        timeout_seconds=settings.analysis_timeout_seconds,
-        reasoning_effort=settings.cerebras_reasoning_effort,
-    )
+    client = vision_model(settings)
+    if client is None:
+        return 2
     service = AiTriageService(client, reference_provider=provider)
 
     tallies: dict[str, Counter[str]] = {}

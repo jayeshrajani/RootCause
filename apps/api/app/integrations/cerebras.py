@@ -20,6 +20,8 @@ class CerebrasError(VisionModelError):
 
 
 class CerebrasClient:
+    provider_label = "Cerebras"
+
     def __init__(
         self,
         *,

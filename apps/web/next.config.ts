@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  output: "standalone",
   devIndicators: false,
   cacheComponents: true,
   partialPrefetching: true,

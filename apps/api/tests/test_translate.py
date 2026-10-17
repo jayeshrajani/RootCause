@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from app.api.deps import get_triage_translator
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.integrations.cerebras import CerebrasClient
+from app.integrations.gemini import GeminiClient
 from app.main import create_app
 from app.schemas.triage import (
     ActionPriority,
@@ -130,8 +130,13 @@ def completion(content: dict[str, Any]) -> httpx.Response:
     return httpx.Response(
         200,
         json={
-            "choices": [{"message": {"content": json.dumps(content)}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 20},
+            "candidates": [
+                {
+                    "content": {"parts": [{"text": json.dumps(content)}]},
+                    "finishReason": "STOP",
+                }
+            ],
+            "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 20},
         },
     )
 
@@ -144,8 +149,8 @@ def translator_with(*responses: httpx.Response) -> tuple[TriageTranslator, list[
         sent.append(json.loads(request.content))
         return queue.pop(0)
 
-    client = CerebrasClient(
-        api_key="test-key", model="qwen-test", transport=httpx.MockTransport(handler)
+    client = GeminiClient(
+        api_key="test-key", model="gemini-test", transport=httpx.MockTransport(handler)
     )
     return TriageTranslator(client), sent
 
@@ -171,11 +176,12 @@ async def test_translation_replaces_text_and_keeps_scores_and_farmer_words() -> 
     assert translated.report_id == "rpt_translate"
     assert translated.location_label == "Bhopal"
 
-    prompt = sent[0]["messages"][1]["content"][0]["text"]
+    prompt = sent[0]["contents"][0]["parts"][0]["text"]
     assert prompt.startswith("Target language: English")
     assert "निचली पत्तियों" in prompt
     assert "पीली हो रही" not in prompt
-    assert sent[0]["response_format"]["json_schema"]["name"] == "triage_translation"
+    assert sent[0]["generationConfig"]["responseMimeType"] == "application/json"
+    assert sent[0]["generationConfig"]["responseJsonSchema"]["type"] == "object"
 
 
 async def test_translation_that_changes_structure_is_retried_then_rejected() -> None:

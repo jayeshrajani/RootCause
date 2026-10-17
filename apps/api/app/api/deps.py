@@ -4,9 +4,10 @@ from fastapi import Depends, Request
 
 from app.core.config import Settings, get_settings
 from app.integrations.cerebras import CerebrasClient
+from app.integrations.gemini import GeminiClient, GeminiRateLimitError
 from app.integrations.google_speech import GoogleSpeechClient
 from app.integrations.open_meteo import OpenMeteoClient
-from app.integrations.vision import VisionModel
+from app.integrations.vision import FallbackVisionModel, VisionModel
 from app.services.satellite import SatelliteService
 from app.services.transcription import TranscriptionService
 from app.services.triage import AiTriageService, MockTriageService, TriageService
@@ -54,9 +55,32 @@ def _cerebras_client(settings: Settings) -> CerebrasClient | None:
     )
 
 
+def _gemini_client(settings: Settings, *, model: str | None = None) -> GeminiClient | None:
+    if not settings.use_gemini or settings.gemini_api_key is None:
+        return None
+    return GeminiClient(
+        api_key=settings.gemini_api_key.get_secret_value(),
+        model=model or settings.gemini_model,
+        timeout_seconds=settings.analysis_timeout_seconds,
+    )
+
+
 def vision_model(settings: Settings) -> VisionModel | None:
     """The configured multimodal model, or None for the labelled mock."""
-    return _cerebras_client(settings)
+    primary: VisionModel | None = _gemini_client(settings)
+    fallback = _cerebras_client(settings)
+    if primary is not None:
+        rate_limit_fallback = _gemini_client(
+            settings, model=settings.gemini_rate_limit_fallback_model
+        )
+        if rate_limit_fallback is not None:
+            primary = FallbackVisionModel(
+                primary, rate_limit_fallback, fallback_on=GeminiRateLimitError
+            )
+        if fallback is not None:
+            return FallbackVisionModel(primary, fallback)
+        return primary
+    return primary or fallback
 
 
 def get_triage_service(
