@@ -14,7 +14,7 @@ from app.core.errors import AppError
 from app.integrations.cerebras import CerebrasClient
 from app.integrations.gemini import GeminiClient, GeminiError, GeminiRateLimitError
 from app.integrations.open_meteo import OpenMeteoError
-from app.integrations.vision import FallbackVisionModel
+from app.integrations.vision import FallbackVisionModel, VisionModelError
 from app.main import create_app
 from app.models.report import FarmerReport, ReportImage
 from app.models.weather import DailyWeather, GeocodedLocation, RecentWeather
@@ -432,6 +432,79 @@ async def test_truncated_output_is_an_error() -> None:
         await client.structured_completion(
             system="s", text="t", images=[], schema_name="x", schema={}
         )
+
+
+async def test_gemini_error_keeps_the_provider_reason_for_logs() -> None:
+    body = {
+        "error": {
+            "code": 400,
+            "status": "INVALID_ARGUMENT",
+            "message": "API key not valid. Please pass a valid API key.\n" + "x" * 500,
+        }
+    }
+    client = GeminiClient(
+        api_key="secret-key",
+        model="m",
+        transport=transport(lambda _: httpx.Response(400, json=body)),
+    )
+
+    with pytest.raises(GeminiError) as exc:
+        await client.structured_completion(
+            system="s", text="t", images=[], schema_name="x", schema={}
+        )
+
+    message = str(exc.value)
+    assert message.startswith("Model API returned HTTP 400 (INVALID_ARGUMENT: API key not valid.")
+    assert "secret-key" not in message
+    assert "\n" not in message
+    assert len(message) < 400
+
+
+async def test_gemini_blocked_prompt_reports_the_block_reason() -> None:
+    client = GeminiClient(
+        api_key="k",
+        model="m",
+        transport=transport(
+            lambda _: httpx.Response(200, json={"promptFeedback": {"blockReason": "SAFETY"}})
+        ),
+    )
+
+    with pytest.raises(GeminiError, match=r"unexpected payload \(SAFETY\)"):
+        await client.structured_completion(
+            system="s", text="t", images=[], schema_name="x", schema={}
+        )
+
+
+async def test_cerebras_error_keeps_the_provider_reason() -> None:
+    body = {"message": "ignored", "error": {"type": "authentication_error", "message": "bad key"}}
+    client = CerebrasClient(
+        api_key="k",
+        model="m",
+        transport=transport(lambda _: httpx.Response(401, json=body)),
+    )
+
+    with pytest.raises(VisionModelError, match=r"HTTP 401 \(authentication_error: bad key\)"):
+        await client.structured_completion(
+            system="s", text="t", images=[], schema_name="x", schema={}
+        )
+
+
+async def test_fallback_logs_why_the_primary_failed(caplog: pytest.LogCaptureFixture) -> None:
+    gemini_body = {"error": {"status": "PERMISSION_DENIED", "message": "API not enabled"}}
+    model = FallbackVisionModel(
+        GeminiClient(
+            api_key="k",
+            model="m",
+            transport=transport(lambda _: httpx.Response(403, json=gemini_body)),
+        ),
+        CerebrasClient(
+            api_key="k", model="c", transport=transport(lambda _: cerebras_completion("{}"))
+        ),
+    )
+
+    await model.structured_completion(system="s", text="t", images=[], schema_name="x", schema={})
+
+    assert "HTTP 403 (PERMISSION_DENIED: API not enabled)" in caplog.text
 
 
 async def test_cerebras_is_used_when_gemini_fails() -> None:

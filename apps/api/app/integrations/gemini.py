@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import truststore
 
-from app.integrations.vision import ImageInput, VisionModelError
+from app.integrations.vision import ImageInput, VisionModelError, provider_error_detail
 
 __all__ = ["GeminiClient", "GeminiError", "ImageInput"]
 
@@ -93,21 +93,35 @@ class GeminiClient:
         if response.status_code == 429:
             raise GeminiRateLimitError("Model API rate limit exceeded (HTTP 429)")
         if response.status_code != 200:
-            raise GeminiError(f"Model API returned HTTP {response.status_code}")
+            detail = provider_error_detail(response)
+            raise GeminiError(
+                f"Model API returned HTTP {response.status_code}"
+                + (f" ({detail})" if detail else "")
+            )
 
         try:
             payload = response.json()
-            candidate = payload["candidates"][0]
+        except ValueError as exc:
+            raise GeminiError("Model API returned an unexpected payload") from exc
+        candidates = payload.get("candidates") if isinstance(payload, dict) else None
+        candidate = candidates[0] if isinstance(candidates, list) and candidates else {}
+        finish_reason = candidate.get("finishReason") if isinstance(candidate, dict) else None
+        try:
             output = "".join(
                 part.get("text", "")
                 for part in candidate["content"]["parts"]
                 if isinstance(part, dict)
             )
-        except (ValueError, KeyError, IndexError, TypeError) as exc:
-            raise GeminiError("Model API returned an unexpected payload") from exc
+        except (KeyError, TypeError) as exc:
+            # No content: the prompt was blocked, or generation stopped early (e.g. SAFETY).
+            feedback = payload.get("promptFeedback") if isinstance(payload, dict) else None
+            reason = (feedback or {}).get("blockReason") or finish_reason
+            raise GeminiError(
+                "Model API returned an unexpected payload" + (f" ({reason})" if reason else "")
+            ) from exc
 
-        if candidate.get("finishReason") in ("MAX_TOKENS", "CONTINUATION") or not output.strip():
-            raise GeminiError("Model output was empty or truncated")
+        if finish_reason in ("MAX_TOKENS", "CONTINUATION") or not output.strip():
+            raise GeminiError(f"Model output was empty or truncated (finishReason={finish_reason})")
 
         usage = payload.get("usageMetadata") or {}
         logger.info(

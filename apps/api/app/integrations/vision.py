@@ -5,9 +5,26 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+import httpx
+
 
 class VisionModelError(Exception):
     """The model call failed or returned unusable output. Message is safe to log."""
+
+
+def provider_error_detail(response: httpx.Response, limit: int = 300) -> str:
+    """The provider's own error reason (status and message), shortened for logs."""
+    try:
+        error = response.json().get("error")
+    except ValueError:
+        return ""
+    if isinstance(error, dict):
+        parts = [str(error.get(key)) for key in ("status", "type", "message") if error.get(key)]
+        detail = ": ".join(parts)
+    else:
+        detail = str(error or "")
+    detail = " ".join(detail.split())
+    return detail if len(detail) <= limit else detail[: limit - 1] + "…"
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +98,9 @@ class FallbackVisionModel:
             if self._fallback_on is not None and not isinstance(primary_error, self._fallback_on):
                 raise
             logging.getLogger(__name__).warning(
-                "Primary vision provider %s failed; trying %s",
+                "Primary vision provider %s failed (%s); trying %s",
                 getattr(self._primary, "provider_label", "AI"),
+                primary_error,
                 getattr(self._fallback, "provider_label", "AI"),
             )
             try:

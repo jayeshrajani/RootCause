@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 import truststore
 
-from app.integrations.vision import ImageInput, VisionModelError
+from app.integrations.vision import ImageInput, VisionModelError, provider_error_detail
 
 __all__ = ["CerebrasClient", "CerebrasError", "ImageInput"]
 
@@ -87,7 +87,11 @@ class CerebrasClient:
             raise CerebrasError(f"Model request failed: {type(exc).__name__}") from exc
 
         if response.status_code != 200:
-            raise CerebrasError(f"Model API returned HTTP {response.status_code}")
+            detail = provider_error_detail(response)
+            raise CerebrasError(
+                f"Model API returned HTTP {response.status_code}"
+                + (f" ({detail})" if detail else "")
+            )
 
         try:
             payload = response.json()
