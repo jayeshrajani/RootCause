@@ -255,18 +255,22 @@ browser tab and always translates from the original result.
 
 ## `POST /transcribe`
 
-Optional voice input for the symptom description. Google Cloud Speech-to-Text V2 (`chirp_3`).
-The transcript is returned in the spoken language (never translated). The web app inserts it into
-the report's `description` field for the farmer to review and edit; it is not stored by the API.
+Voice input for the symptom description. Gemini (`gemini-flash-lite-latest`) when `GEMINI_API_KEY`
+is set, falling back to Google Cloud Speech-to-Text V2 (`chirp_3`) when a project is configured
+(`ROOTCAUSE_SPEECH_PROVIDER` = `auto` | `gemini` | `google`). The transcript is returned in the
+spoken language (never translated; Hindi in Devanagari). The web app sends `language=auto`, adds the
+transcript to the report's `description` and submits the report straight away; it is not stored by
+the API.
 
 `Content-Type: multipart/form-data`
 
 | Field | Type | Required | Rules |
 | --- | --- | --- | --- |
 | `audio` | file | yes | ≤ 5 MB and under 1 minute (Speech-to-Text's synchronous limit; the web app stops at 55 s); WebM/Ogg (Opus), WAV or FLAC by file signature. Speech-to-Text V2 can also decode MP3 and MP4/M4A (AAC), but this API does not accept them yet |
-| `language` | string | yes | One of `ROOTCAUSE_SPEECH_LANGUAGES` (default `en-IN`, `hi-IN`) |
+| `language` | string | yes | `auto` (detect English or Hindi), or one of `ROOTCAUSE_SPEECH_LANGUAGES` (default `en-IN`, `hi-IN`) |
 
-200 response: `{ "transcript": "मेरे टमाटर के पत्ते पीले हो रहे हैं", "language": "hi-IN" }`
+200 response: `{ "transcript": "मेरे टमाटर के पत्ते पीले हो रहे हैं", "language": "hi-IN" }`. With
+`auto`, `language` is the detected code, or `auto` if it is neither English nor Hindi.
 
 | Status | `code` | When |
 | --- | --- | --- |

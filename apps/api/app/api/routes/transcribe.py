@@ -7,6 +7,7 @@ from app.api.deps import SettingsDep, get_transcription_service
 from app.schemas.errors import ErrorResponse
 from app.schemas.transcription import TranscriptionResponse
 from app.services.transcription import (
+    AUTO_LANGUAGE,
     TranscriptionService,
     read_validated_audio,
     validate_language,
@@ -44,9 +45,16 @@ async def transcribe(
             )
         ),
     ] = None,
-    language: Annotated[str | None, Form(max_length=20)] = None,
+    language: Annotated[
+        str | None,
+        Form(max_length=20, description='Language code such as hi-IN, or "auto" to detect it.'),
+    ] = None,
 ) -> TranscriptionResponse:
     code = validate_language(language, settings.speech_languages)
     data = await read_validated_audio(audio, max_bytes=settings.max_audio_bytes)
-    transcript = await service.transcribe(data, code)
-    return TranscriptionResponse(transcript=transcript, language=code)
+    result = await service.transcribe(data, code)
+    if code == AUTO_LANGUAGE:
+        # Speech-to-Text reports e.g. "hi-in"; map it back to an enabled code when possible.
+        detected = (result.language_code or "").lower()
+        code = next((c for c in settings.speech_languages if c.lower() == detected), code)
+    return TranscriptionResponse(transcript=result.transcript, language=code)

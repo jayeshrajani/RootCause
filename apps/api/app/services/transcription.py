@@ -10,13 +10,15 @@ from collections.abc import Sequence
 from fastapi import UploadFile, status
 
 from app.core.errors import AppError
-from app.integrations.google_speech import SpeechError, SpeechRecognizer
+from app.integrations.google_speech import SpeechError, SpeechRecognizer, SpeechResult
 from app.schemas.errors import ErrorDetail
 
 logger = logging.getLogger(__name__)
 
 # Below this size a container holds headers only, not speech.
 MIN_AUDIO_BYTES = 512
+# Sent by the app when the farmer does not pick a language; the recognizer detects it.
+AUTO_LANGUAGE = "auto"
 
 
 def detect_audio_type(data: bytes) -> str | None:
@@ -42,6 +44,8 @@ def _error(status_code: int, code: str, message: str, field: str | None = None) 
 
 
 def validate_language(language: str | None, enabled: Sequence[str]) -> str:
+    if language == AUTO_LANGUAGE:
+        return language
     if language is None or language not in enabled:
         raise _error(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -82,6 +86,30 @@ async def read_validated_audio(upload: UploadFile | None, *, max_bytes: int) -> 
     return data
 
 
+class FallbackRecognizer:
+    """Tries each recognizer in order, moving on when one is unavailable rather than rejecting."""
+
+    def __init__(self, recognizers: Sequence[SpeechRecognizer]) -> None:
+        self._recognizers = list(recognizers)
+
+    async def recognize(self, audio: bytes, language_code: str) -> SpeechResult:
+        last: SpeechError | None = None
+        for recognizer in self._recognizers:
+            try:
+                return await recognizer.recognize(audio, language_code)
+            except SpeechError as exc:
+                if exc.kind == "rejected":
+                    raise
+                logger.warning(
+                    "Recognizer %s failed kind=%s; trying the next one",
+                    type(recognizer).__name__,
+                    exc.kind,
+                )
+                last = exc
+        assert last is not None
+        raise last
+
+
 class TranscriptionService:
     """Transcribes validated audio with the configured recognizer (None = not configured)."""
 
@@ -92,7 +120,7 @@ class TranscriptionService:
     def configured(self) -> bool:
         return self._recognizer is not None
 
-    async def transcribe(self, audio: bytes, language: str) -> str:
+    async def transcribe(self, audio: bytes, language: str) -> SpeechResult:
         if self._recognizer is None:
             raise _error(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -130,9 +158,10 @@ class TranscriptionService:
                 "audio",
             )
         logger.info(
-            "Transcription completed language=%s audio_bytes=%d characters=%d",
+            "Transcription completed language=%s detected=%s audio_bytes=%d characters=%d",
             language,
+            result.language_code,
             len(audio),
             len(transcript),
         )
-        return transcript
+        return SpeechResult(transcript, result.language_code)

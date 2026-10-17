@@ -138,6 +138,7 @@ class GoogleSpeechClient:
         body = {
             "config": {
                 "autoDecodingConfig": {},
+                # Chirp 3 detects the spoken language itself when given "auto".
                 "languageCodes": [language_code],
                 "model": self.model,
             },

@@ -265,7 +265,7 @@ async def test_weather_rules_adjust_cause_ranking_by_bounded_points() -> None:
 
 
 async def test_weak_causes_hidden_and_dominant_cause_stands_alone() -> None:
-    def cause(key: str, score: int) -> dict:
+    def cause(key: str, score: int) -> dict[str, Any]:
         return {
             "name": key,
             "explanation": "x",
@@ -277,7 +277,7 @@ async def test_weak_causes_hidden_and_dominant_cause_stands_alone() -> None:
             "condition_key": key,
         }
 
-    async def keys(*causes: dict) -> list[str]:
+    async def keys(*causes: dict[str, Any]) -> list[str | None]:
         service, _ = service_with(completion(json.dumps(assessment(possible_causes=list(causes)))))
         result = await service.assess(REPORT)
         return [c.condition_key for c in result.possible_causes]

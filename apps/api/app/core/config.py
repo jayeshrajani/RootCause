@@ -73,9 +73,13 @@ class Settings(BaseSettings):
     satellite_stale_days: int = Field(default=20, ge=5, le=120)
     satellite_cache_ttl_seconds: int = Field(default=6 * 3600, ge=0)
 
-    # Voice input (Google Cloud Speech-to-Text V2). Project defaults to GOOGLE_CLOUD_PROJECT_ID;
-    # credentials come from ADC / the attached service account, never from files in Git.
+    # Voice input. "auto" uses Gemini (language auto-detected) when GEMINI_API_KEY is set, with
+    # Google Cloud Speech-to-Text V2 as a fallback when a project is configured.
     speech_enabled: bool = True
+    speech_provider: Literal["auto", "gemini", "google"] = "auto"
+    speech_gemini_model: str = "gemini-flash-lite-latest"
+    # Speech-to-Text V2. Project defaults to GOOGLE_CLOUD_PROJECT_ID; credentials come from
+    # ADC / the attached service account, never from files in Git.
     speech_project_id: str | None = None
     speech_location: str = Field(default="us", pattern=r"^[a-z0-9-]{2,32}$")
     speech_model: str = "chirp_3"
@@ -89,8 +93,22 @@ class Settings(BaseSettings):
         return self.speech_project_id or self.google_cloud_project_id
 
     @property
+    def speech_uses_gemini(self) -> bool:
+        return (
+            self.speech_enabled
+            and self.speech_provider != "google"
+            and self.gemini_api_key is not None
+        )
+
+    @property
+    def speech_uses_google(self) -> bool:
+        return (
+            self.speech_enabled and self.speech_provider != "gemini" and bool(self.speech_project)
+        )
+
+    @property
     def speech_configured(self) -> bool:
-        return self.speech_enabled and bool(self.speech_project)
+        return self.speech_uses_gemini or self.speech_uses_google
 
     @property
     def satellite_configured(self) -> bool:

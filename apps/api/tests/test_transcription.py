@@ -11,9 +11,14 @@ from google.auth.exceptions import DefaultCredentialsError
 
 from app.api.deps import get_transcription_service
 from app.core.config import Settings, get_settings
-from app.integrations.google_speech import GoogleSpeechClient
+from app.integrations.gemini_speech import GeminiSpeechClient
+from app.integrations.google_speech import GoogleSpeechClient, SpeechError
 from app.main import create_app
-from app.services.transcription import TranscriptionService, detect_audio_type
+from app.services.transcription import (
+    FallbackRecognizer,
+    TranscriptionService,
+    detect_audio_type,
+)
 
 WEBM = b"\x1aE\xdf\xa3" + b"\x42" * 2048
 OGG = b"OggS" + b"\x00" * 2048
@@ -302,3 +307,127 @@ def test_speech_project_override_and_client_reuse() -> None:
 )
 def test_detect_audio_type(data: bytes, expected: str | None) -> None:
     assert detect_audio_type(data) == expected
+
+
+def gemini_response(transcript: str, language: str) -> httpx.Response:
+    text = json.dumps({"transcript": transcript, "language": language})
+    return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": text}]}}]})
+
+
+def gemini_client(handler: Handler) -> GeminiSpeechClient:
+    client = GeminiSpeechClient(api_key="test-key", transport=httpx.MockTransport(handler))
+    client._retry_delay = 0
+    return client
+
+
+def test_auto_language_uses_gemini_detection(
+    make_client: Callable[[TranscriptionService], TestClient],
+) -> None:
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return gemini_response(HINDI, "hi-IN")
+
+    response = post(make_client(TranscriptionService(gemini_client(handler))), WEBM, "auto")
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"transcript": HINDI, "language": "hi-IN"}
+    request = sent[0]
+    assert request.url.path == "/v1beta/models/gemini-flash-lite-latest:generateContent"
+    assert request.headers["x-goog-api-key"] == "test-key"
+    body = json.loads(request.content)
+    audio = body["contents"][0]["parts"][1]["inlineData"]
+    assert audio["mimeType"] == "audio/webm"
+    assert base64.b64decode(audio["data"]) == WEBM
+    assert "Devanagari" in body["systemInstruction"]["parts"][0]["text"]
+
+
+def test_auto_language_with_unknown_detection_reports_auto(
+    make_client: Callable[[TranscriptionService], TestClient],
+) -> None:
+    service = TranscriptionService(gemini_client(lambda _: gemini_response("Bonjour", "other")))
+
+    response = post(make_client(service), WEBM, "auto")
+
+    assert response.json() == {"transcript": "Bonjour", "language": "auto"}
+
+
+def test_auto_language_maps_speech_to_text_codes(
+    make_client: Callable[[TranscriptionService], TestClient],
+) -> None:
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return speech_response(HINDI, language="hi-in")
+
+    response = post(make_client(service_for(handler)), WEBM, "auto")
+
+    assert response.json() == {"transcript": HINDI, "language": "hi-IN"}
+    assert sent[0]["config"]["languageCodes"] == ["auto"]
+
+
+def test_gemini_retries_once_when_overloaded(
+    make_client: Callable[[TranscriptionService], TestClient],
+) -> None:
+    statuses = iter([503, 200])
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        status = next(statuses)
+        return gemini_response("Brown spots", "en-IN") if status == 200 else httpx.Response(503)
+
+    response = post(make_client(TranscriptionService(gemini_client(handler))), WEBM, "auto")
+
+    assert response.status_code == 200
+    assert response.json()["transcript"] == "Brown spots"
+
+
+def test_falls_back_to_speech_to_text_when_gemini_is_unavailable(
+    make_client: Callable[[TranscriptionService], TestClient],
+) -> None:
+    gemini = gemini_client(lambda _: httpx.Response(503))
+    google = GoogleSpeechClient(
+        project_id="rootcause-test",
+        auth_headers=fake_headers,
+        transport=httpx.MockTransport(lambda _: speech_response("Brown spots", language="en-in")),
+    )
+    service = TranscriptionService(FallbackRecognizer([gemini, google]))
+
+    response = post(make_client(service), WEBM, "auto")
+
+    assert response.json() == {"transcript": "Brown spots", "language": "en-IN"}
+
+
+@pytest.mark.anyio
+async def test_fallback_stops_on_rejected_audio() -> None:
+    called: list[str] = []
+
+    class Rejecting:
+        async def recognize(self, audio: bytes, language_code: str) -> Any:
+            raise SpeechError("rejected", "bad audio")
+
+    class Never:
+        async def recognize(self, audio: bytes, language_code: str) -> Any:
+            called.append("never")
+
+    with pytest.raises(SpeechError):
+        await FallbackRecognizer([Rejecting(), Never()]).recognize(WEBM, "auto")
+    assert called == []
+
+
+def test_gemini_is_preferred_when_key_is_set() -> None:
+    both = Settings(gemini_api_key="k", google_cloud_project_id="ee-project", _env_file=None)
+    only_google = Settings(
+        gemini_api_key="k",
+        google_cloud_project_id="ee-project",
+        speech_provider="google",
+        _env_file=None,
+    )
+
+    assert isinstance(get_transcription_service(both)._recognizer, FallbackRecognizer)
+    assert isinstance(get_transcription_service(only_google)._recognizer, GoogleSpeechClient)
+    assert isinstance(
+        get_transcription_service(Settings(gemini_api_key="k", _env_file=None))._recognizer,
+        GeminiSpeechClient,
+    )

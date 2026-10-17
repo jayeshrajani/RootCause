@@ -5,11 +5,12 @@ from fastapi import Depends, Request
 from app.core.config import Settings, get_settings
 from app.integrations.cerebras import CerebrasClient
 from app.integrations.gemini import GeminiClient, GeminiRateLimitError
-from app.integrations.google_speech import GoogleSpeechClient
+from app.integrations.gemini_speech import GeminiSpeechClient
+from app.integrations.google_speech import GoogleSpeechClient, SpeechRecognizer
 from app.integrations.open_meteo import OpenMeteoClient
 from app.integrations.vision import FallbackVisionModel, VisionModel
 from app.services.satellite import SatelliteService
-from app.services.transcription import TranscriptionService
+from app.services.transcription import FallbackRecognizer, TranscriptionService
 from app.services.triage import AiTriageService, MockTriageService, TriageService
 from app.services.triage.identify import CropIdentifier, CropSimilaritySource
 from app.services.triage.references import ReferenceProvider
@@ -114,25 +115,46 @@ def get_triage_translator(settings: SettingsDep) -> TriageTranslator | None:
     return TriageTranslator(client) if client is not None else None
 
 
-_speech_clients: dict[tuple[str, str, str, float], GoogleSpeechClient] = {}
+_speech_clients: dict[tuple[object, ...], SpeechRecognizer] = {}
 
 
 def get_transcription_service(settings: SettingsDep) -> TranscriptionService:
-    project = settings.speech_project
-    if not settings.speech_configured or project is None:
-        return TranscriptionService(None)
-    key = (
-        project,
-        settings.speech_location,
-        settings.speech_model,
-        settings.speech_timeout_seconds,
-    )
-    if key not in _speech_clients:
-        # One client per configuration, so ADC credentials and tokens are reused across requests.
-        _speech_clients[key] = GoogleSpeechClient(
-            project_id=project,
-            location=settings.speech_location,
-            model=settings.speech_model,
-            timeout_seconds=settings.speech_timeout_seconds,
+    recognizers: list[SpeechRecognizer] = []
+    if settings.speech_uses_gemini and settings.gemini_api_key is not None:
+        api_key = settings.gemini_api_key.get_secret_value()
+        gemini_key = (
+            "gemini",
+            api_key,
+            settings.speech_gemini_model,
+            settings.speech_timeout_seconds,
         )
-    return TranscriptionService(_speech_clients[key])
+        if gemini_key not in _speech_clients:
+            _speech_clients[gemini_key] = GeminiSpeechClient(
+                api_key=api_key,
+                model=settings.speech_gemini_model,
+                timeout_seconds=settings.speech_timeout_seconds,
+            )
+        recognizers.append(_speech_clients[gemini_key])
+    project = settings.speech_project
+    if settings.speech_uses_google and project is not None:
+        google_key = (
+            "google",
+            project,
+            settings.speech_location,
+            settings.speech_model,
+            settings.speech_timeout_seconds,
+        )
+        if google_key not in _speech_clients:
+            # One client per configuration, so ADC credentials and tokens are reused.
+            _speech_clients[google_key] = GoogleSpeechClient(
+                project_id=project,
+                location=settings.speech_location,
+                model=settings.speech_model,
+                timeout_seconds=settings.speech_timeout_seconds,
+            )
+        recognizers.append(_speech_clients[google_key])
+    if not recognizers:
+        return TranscriptionService(None)
+    if len(recognizers) == 1:
+        return TranscriptionService(recognizers[0])
+    return TranscriptionService(FallbackRecognizer(recognizers))
