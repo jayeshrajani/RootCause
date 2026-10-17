@@ -1,21 +1,11 @@
 import { DESCRIPTION_MAX } from "@/lib/constants";
-import type { Language } from "@/lib/i18n";
 
 // Stays under Speech-to-Text's 1-minute limit for synchronous recognition, with margin for the stop.
 export const MAX_RECORDING_SECONDS = 55;
 export const WAV_SAMPLE_RATE = 16_000;
 
-/** Offered in the UI. Each code must also be enabled on the API (ROOTCAUSE_SPEECH_LANGUAGES). */
-export const SPEECH_LANGUAGES = [
-  { code: "en-IN", label: "English" },
-  { code: "hi-IN", label: "हिन्दी" },
-] as const;
-
-export type SpeechLanguage = (typeof SPEECH_LANGUAGES)[number]["code"];
-
-export function speechLanguageFor(uiLanguage: Language): SpeechLanguage {
-  return uiLanguage === "hi" ? "hi-IN" : "en-IN";
-}
+/** The API detects whether the farmer spoke English or Hindi. */
+export const AUTO_LANGUAGE = "auto";
 
 // Opus containers the API accepts (target browsers: Chrome desktop and Android Chrome). Speech-to-Text
 // V2 can also decode MP4/AAC, but the API does not accept it yet; browsers without Opus use WAV.

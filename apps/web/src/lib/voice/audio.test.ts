@@ -8,7 +8,6 @@ import {
   fileExtension,
   formatClock,
   pickRecorderType,
-  speechLanguageFor,
 } from "@/lib/voice/audio";
 
 function readBytes(blob: Blob): Promise<ArrayBuffer> {
@@ -32,12 +31,6 @@ describe("voice audio helpers", () => {
     expect(fileExtension("audio/webm;codecs=opus")).toBe("webm");
     expect(fileExtension("audio/ogg")).toBe("ogg");
     expect(fileExtension("audio/wav")).toBe("wav");
-  });
-
-  it("defaults the spoken language from the interface language", () => {
-    expect(speechLanguageFor("hi")).toBe("hi-IN");
-    expect(speechLanguageFor("en")).toBe("en-IN");
-    expect(speechLanguageFor("pa")).toBe("en-IN");
   });
 
   it("encodes mono 16-bit WAV with a valid header", async () => {

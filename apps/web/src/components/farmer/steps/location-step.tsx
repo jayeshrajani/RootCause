@@ -117,7 +117,7 @@ export function LocationStep({ location }: { location: FieldLocation }) {
   useEffect(() => {
     if (!hasCoords || !advanceOnFix.current) return;
     advanceOnFix.current = false;
-    scrollToStep("step-3");
+    scrollToStep("part-2");
   }, [hasCoords]);
 
   useEffect(() => {
@@ -156,7 +156,7 @@ export function LocationStep({ location }: { location: FieldLocation }) {
     location.cancel();
     advanceOnFix.current = false;
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    scrollToStep("step-3");
+    scrollToStep("part-2");
   };
 
   return (

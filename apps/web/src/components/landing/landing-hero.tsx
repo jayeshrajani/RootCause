@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ArrowRight, Check, CloudSun, Droplets, ListChecks, LogIn, Trophy } from "lucide-react";
+import { Check, CloudSun, Droplets, ListChecks, Trophy } from "lucide-react";
 import { motion } from "motion/react";
 
 import { ButtonLink } from "@/components/brand/button";
@@ -93,10 +93,6 @@ export function LandingHero() {
             <ButtonLink href="#principles" variant="ghost" className="hidden sm:inline-flex">
               {t("howItWorks")}
             </ButtonLink>
-            <ButtonLink href="/auth" variant="outline">
-              <LogIn aria-hidden />
-              {t("signIn")}
-            </ButtonLink>
           </div>
         </nav>
       </Reveal>
@@ -141,15 +137,11 @@ export function LandingHero() {
 
         <Reveal delay={0.9} className="mt-8 flex w-full flex-col items-center gap-3 sm:mt-9">
           <PillLink
-            href="/auth"
+            href="/report"
             className="h-[76px] w-full max-w-[360px] justify-between gap-5 whitespace-nowrap pr-2 pl-7 text-lg shadow-[0_14px_30px_rgba(22,54,38,0.18)] transition-transform hover:-translate-y-0.5 [&_span]:size-14 [&_span_svg]:size-6"
           >
             {t("startReport")}
           </PillLink>
-          <ButtonLink href="/report" variant="ghost" size="md" className="gap-2 text-forest-900/70">
-            {t("tryGuest")}
-            <ArrowRight className="transition-transform group-hover:translate-x-0.5" aria-hidden />
-          </ButtonLink>
         </Reveal>
       </div>
 

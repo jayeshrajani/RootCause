@@ -10,14 +10,20 @@ import { installFakeMedia, removeFakeMedia } from "@/test/fake-media";
 
 const HINDI = "मेरे टमाटर के पत्ते पीले हो रहे हैं";
 
-function Harness({ initial = "" }: { initial?: string }) {
+function Harness({
+  initial = "",
+  onTranscribed,
+}: {
+  initial?: string;
+  onTranscribed?: (transcript: string) => void;
+}) {
   const form = useForm<ReportFormInput>({
     defaultValues: { ...reportFormDefaults, description: initial },
   });
   return (
     <I18nProvider>
       <FormProvider {...form}>
-        <VoiceInput />
+        <VoiceInput onTranscribed={onTranscribed} />
         <textarea aria-label="Description" {...form.register("description")} />
       </FormProvider>
     </I18nProvider>
@@ -60,67 +66,27 @@ describe("VoiceInput", () => {
       ),
     );
     expect(track.stop).toHaveBeenCalled();
-    expect(sentLanguage(fetchMock)).toBe("en-IN");
+    expect(sentLanguage(fetchMock)).toBe("auto");
     expect(String(fetchMock.mock.calls[0][0])).toContain("/api/v1/transcribe");
-    expect(screen.getByText(/added to your description/i)).toBeTruthy();
+    expect(screen.getByText(/Yellow spots on lower leaves/, { selector: "p.italic" })).toBeTruthy();
   });
 
-  it("lets the farmer choose Hindi and keeps the Hindi transcript untranslated", async () => {
-    const user = userEvent.setup();
-    installFakeMedia();
-    const fetchMock = respond(200, { transcript: HINDI, language: "hi-IN" });
-    vi.stubGlobal("fetch", fetchMock);
-    render(<Harness />);
-
-    const hindi = screen.getByRole("button", { name: "हिन्दी" });
-    await user.click(hindi);
-    expect(hindi.getAttribute("aria-pressed")).toBe("true");
-    await recordOnce(user);
-
-    await waitFor(() =>
-      expect((screen.getByLabelText("Description") as HTMLTextAreaElement).value).toBe(HINDI),
-    );
-    expect(sentLanguage(fetchMock)).toBe("hi-IN");
-  });
-
-  it("defaults to Hindi when the app is in Hindi and sends hi-IN", async () => {
+  it("asks the API to detect the language and hands the Hindi transcript on untranslated", async () => {
     window.localStorage.setItem("rootcause.language", "hi");
     const user = userEvent.setup();
     installFakeMedia();
     const fetchMock = respond(200, { transcript: HINDI, language: "hi-IN" });
     vi.stubGlobal("fetch", fetchMock);
-    render(<Harness />);
+    const onTranscribed = vi.fn();
+    render(<Harness onTranscribed={onTranscribed} />);
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "हिन्दी" }).getAttribute("aria-pressed")).toBe(
-        "true",
-      ),
-    );
-    await user.click(screen.getByRole("button", { name: /^आवाज़ में बताएँ/ }));
+    expect(screen.queryByRole("button", { name: "हिन्दी" })).toBeNull();
+    await user.click(await screen.findByRole("button", { name: /^आवाज़ में बताएँ/ }));
     await user.click(await screen.findByRole("button", { name: "रोकें" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(sentLanguage(fetchMock)).toBe("hi-IN");
-  });
-
-  it("keeps the farmer's spoken-language choice in a Hindi interface", async () => {
-    window.localStorage.setItem("rootcause.language", "hi");
-    const user = userEvent.setup();
-    installFakeMedia();
-    const fetchMock = respond(200, { transcript: "Yellow leaves.", language: "en-IN" });
-    vi.stubGlobal("fetch", fetchMock);
-    render(<Harness />);
-
-    const hindi = screen.getByRole("button", { name: "हिन्दी" });
-    await waitFor(() => expect(hindi.getAttribute("aria-pressed")).toBe("true"));
-    const english = screen.getByRole("button", { name: "English" });
-    await user.click(english);
-    await user.click(screen.getByRole("button", { name: /^आवाज़ में बताएँ/ }));
-    await user.click(await screen.findByRole("button", { name: "रोकें" }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(sentLanguage(fetchMock)).toBe("en-IN");
-    expect(english.getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(onTranscribed).toHaveBeenCalledWith(HINDI));
+    expect((screen.getByLabelText("Description") as HTMLTextAreaElement).value).toBe(HINDI);
+    expect(sentLanguage(fetchMock)).toBe("auto");
   });
 
   it("explains an empty recording and does not call the API", async () => {
@@ -218,7 +184,7 @@ describe("VoiceInput", () => {
     expect(textarea.value).toBe("Brown spots on older leaves.");
   });
 
-  it("never overwrites typed text without asking", async () => {
+  it("adds a voice note after text the farmer already typed", async () => {
     const user = userEvent.setup();
     installFakeMedia();
     vi.stubGlobal("fetch", respond(200, { transcript: "Spreading fast.", language: "en-IN" }));
@@ -226,16 +192,8 @@ describe("VoiceInput", () => {
     const textarea = screen.getByLabelText("Description") as HTMLTextAreaElement;
 
     await recordOnce(user);
-    await user.click(await screen.findByRole("button", { name: "Keep my text" }));
-    expect(textarea.value).toBe("Started three days ago.");
 
-    await recordOnce(user);
-    await user.click(await screen.findByRole("button", { name: "Add to the end" }));
-    expect(textarea.value).toBe("Started three days ago. Spreading fast.");
-
-    await recordOnce(user);
-    await user.click(await screen.findByRole("button", { name: "Replace" }));
-    expect(textarea.value).toBe("Spreading fast.");
+    await waitFor(() => expect(textarea.value).toBe("Started three days ago. Spreading fast."));
   });
 
   it("can cancel a recording without sending anything", async () => {

@@ -86,7 +86,7 @@ export default function HomePage() {
             <p className="max-w-md text-mint-200/80">
               {t("landingCtaBody")}
             </p>
-            <PillLink href="/auth" tone="light">
+            <PillLink href="/report" tone="light">
               {t("startReport")}
             </PillLink>
           </Reveal>

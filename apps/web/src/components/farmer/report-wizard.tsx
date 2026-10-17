@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FormProvider, useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertCircle, Sparkles } from "lucide-react";
+import { AlertCircle, Camera, Sparkles } from "lucide-react";
 
 import { pillClass, PillIcon } from "@/components/brand/pill";
 import { AnalysingOverlay } from "@/components/farmer/analysing-overlay";
 import { CropConfirm } from "@/components/farmer/crop-confirm";
-import { CropStep } from "@/components/farmer/steps/crop-step";
+import { ReportSteps } from "@/components/farmer/steps/report-steps";
 import { Spinner } from "@/components/ui/spinner";
 import { ApiError, identifyCrop, submitTriageReport } from "@/lib/api/client";
+import { useI18n } from "@/lib/i18n";
 import { rememberReport } from "@/lib/last-report";
 import {
   reportFormDefaults,
@@ -20,6 +21,7 @@ import {
   type ReportFormInput,
   type ReportFormValues,
 } from "@/lib/schemas/report";
+import { scrollToStep } from "@/lib/step-scroll";
 import { saveLatestTriage } from "@/lib/triage-storage";
 import type { Crop } from "@/types/triage";
 
@@ -34,8 +36,23 @@ const ERROR_TITLES: Record<ApiError["kind"], string> = {
   server: "Analysis didn't finish",
 };
 
+// The last fresh visit we scrolled for; back/forward re-shows keep their scroll position.
+let scrolledFor: string | null = null;
+
+/** Pages stay alive between navigations (Cache Components / Activity), so key the form on
+ * `bfcacheId`: every "New report" link starts a fresh report at step 1, while browser back still
+ * restores the one in progress. */
 export function ReportWizard() {
+  const { bfcacheId } = useRouter();
+  return <ReportForm key={bfcacheId} visit={bfcacheId} />;
+}
+
+function ReportForm({ visit }: { visit: string }) {
   const router = useRouter();
+  const { t } = useI18n();
+  // Set by a voice note: shown while analysing, and starts the triage once a photo is added.
+  const [heard, setHeard] = useState<string | null>(null);
+  const [waitingForPhoto, setWaitingForPhoto] = useState(false);
   const [submitError, setSubmitError] = useState<ApiError | null>(null);
   const [phase, setPhase] = useState<"identify" | "analyse">("analyse");
   const [cropQuestion, setCropQuestion] = useState<{
@@ -48,7 +65,14 @@ export function ReportWizard() {
     defaultValues: reportFormDefaults,
     mode: "onTouched",
   });
-  const { handleSubmit, setError, getValues, formState } = form;
+  const { handleSubmit, setError, getValues, formState, watch } = form;
+
+  // A new report starts at the top, even when arriving from a scrolled results page.
+  useEffect(() => {
+    if (scrolledFor === visit) return;
+    scrolledFor = visit;
+    window.scrollTo({ top: 0 });
+  }, [visit]);
 
   /** Stage 1: identify the crop; continue automatically when confident, otherwise ask. */
   async function resolveCrop(values: ReportFormValues): Promise<Crop | ""> {
@@ -84,11 +108,46 @@ export function ReportWizard() {
     }
   });
 
+  const onTranscribed = (transcript: string) => {
+    setHeard(transcript);
+    if (getValues("images").length > 0) {
+      void submit();
+    } else {
+      setWaitingForPhoto(true);
+      scrollToStep("part-1", 0);
+    }
+  };
+
+  // The farmer already described the problem by voice: start as soon as the photo arrives.
+  const waitingRef = useRef(waitingForPhoto);
+  useEffect(() => {
+    waitingRef.current = waitingForPhoto;
+  }, [waitingForPhoto]);
+  useEffect(() => {
+    const subscription = watch((values, { name }) => {
+      if (name !== "images" || !waitingRef.current || !values.images?.length) return;
+      setWaitingForPhoto(false);
+      void submit();
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, submit]);
+
+  const coordinates = getValues("latitude") && getValues("longitude")
+    ? { latitude: getValues("latitude"), longitude: getValues("longitude") }
+    : null;
+
   return (
     <FormProvider {...form}>
       <AnimatePresence>
         {formState.isSubmitting && cropQuestion === null ? (
-          <AnalysingOverlay key={phase} photo={getValues("images")[0]} phase={phase} />
+          <AnalysingOverlay
+            key={phase}
+            photo={getValues("images")[0]}
+            phase={phase}
+            coordinates={coordinates}
+            transcript={heard}
+            hasDescription={Boolean(getValues("description")?.trim())}
+          />
         ) : null}
       </AnimatePresence>
       <AnimatePresence>
@@ -106,12 +165,20 @@ export function ReportWizard() {
         noValidate
         className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-6 sm:pt-8 lg:px-8"
       >
-        <h1 className="text-3xl leading-tight font-medium sm:text-4xl">Report a crop problem</h1>
-        <p className="mt-2 mb-6 text-muted-foreground sm:mb-8 sm:text-lg">
-          Choose the crop and add a photo. Everything else is optional.
-        </p>
+        <h1 className="text-3xl leading-tight font-medium sm:text-4xl">{t("reportHeading")}</h1>
+        <p className="mt-2 mb-6 text-muted-foreground sm:mb-8 sm:text-lg">{t("reportLead")}</p>
 
-        <CropStep />
+        <ReportSteps
+          onTranscribed={onTranscribed}
+          voiceNotice={
+            waitingForPhoto ? (
+              <p role="status" className="flex items-center gap-2 text-sm font-medium text-clay-600">
+                <Camera className="size-4 shrink-0" aria-hidden />
+                {t("voiceNeedPhoto")}
+              </p>
+            ) : null
+          }
+        />
 
         <AnimatePresence>
           {submitError ? (
@@ -138,7 +205,7 @@ export function ReportWizard() {
               disabled={formState.isSubmitting}
               className={pillClass("dark", "w-full justify-between sm:w-auto")}
             >
-              Get triage
+              {t("getTriage")}
               <PillIcon>
                 {formState.isSubmitting ? <Spinner className="size-4" /> : <Sparkles className="size-4" />}
               </PillIcon>
