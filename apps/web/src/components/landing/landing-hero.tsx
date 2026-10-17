@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Check, CloudSun, Droplets, ListChecks, Trophy } from "lucide-react";
+import { Check, CloudSun, Droplets, ListChecks, Satellite, Trophy } from "lucide-react";
 import { motion } from "motion/react";
 
 import { ButtonLink } from "@/components/brand/button";
@@ -90,7 +90,7 @@ export function LandingHero() {
           <Logo className="pl-1" />
           <div className="flex items-center gap-1 sm:gap-2">
             <LanguageSwitcher className="border-transparent bg-white/35" />
-            <ButtonLink href="#principles" variant="ghost" className="hidden sm:inline-flex">
+            <ButtonLink href="#under-the-hood" variant="ghost" className="hidden sm:inline-flex">
               {t("howItWorks")}
             </ButtonLink>
           </div>
@@ -154,7 +154,7 @@ export function LandingHero() {
         >
           <FieldRows className="absolute inset-0 [mask-image:radial-gradient(ellipse_80%_95%_at_50%_100%,black_35%,transparent_88%)]" />
         </motion.div>
-        <AnimatedPlant className="absolute bottom-[-2%] left-1/2 z-10 h-[88%] w-auto -translate-x-1/2 drop-shadow-[0_12px_12px_rgba(22,54,38,0.10)] sm:h-[100%] xl:hidden" />
+        <AnimatedPlant className="absolute bottom-[-2%] left-1/2 z-10 h-[88%] w-auto -translate-x-1/2 drop-shadow-[0_12px_12px_rgba(22,54,38,0.10)] sm:h-[100%] xl:h-[78%]" />
         <Reveal delay={1.35} className="absolute bottom-[14%] left-4 sm:left-[12%] xl:hidden">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 font-mono text-xs font-medium shadow-sm shadow-forest-900/10 backdrop-blur-sm">
             <CloudSun className="size-3.5" />
@@ -164,7 +164,7 @@ export function LandingHero() {
       </div>
 
       <div aria-hidden className="pointer-events-none absolute inset-0 z-10 hidden xl:block">
-        <PreviewCard className="top-[46%] left-[4%] w-52 2xl:w-60" delay={1.1} tilt={-3}>
+        <PreviewCard className="top-[42%] left-[3%] w-[17rem] 2xl:left-[6%]" delay={1.1} tilt={-3}>
           <div className="flex items-center gap-3.5">
             <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl bg-mint-200">
               <LeafIllustration className="absolute inset-0 m-auto h-14 text-forest-700" />
@@ -176,16 +176,16 @@ export function LandingHero() {
               />
             </div>
             <div className="min-w-0">
-              <p className="label-caps text-forest-600">{t("photograph")}</p>
-              <p className="mt-1 text-sm leading-snug font-medium">{t("heroScanLabel")}</p>
+              <p className="label-caps text-forest-600">{t("heroScanTag")}</p>
+              <p className="mt-1 text-sm leading-snug font-medium text-balance">{t("heroScanLabel")}</p>
             </div>
           </div>
         </PreviewCard>
 
-        <PreviewCard className="top-[67%] left-[10%] w-56" delay={1.3} tilt={2}>
+        <PreviewCard className="top-[64%] left-[6%] w-56 2xl:left-[10%]" delay={1.3} tilt={2}>
           <p className="label-caps flex items-center gap-1.5 text-forest-600">
             <CloudSun className="size-3.5" />
-            {t("recentWeather")}
+            {t("heroWeatherTag")}
           </p>
           <p className="mt-2 flex items-center gap-2 font-mono text-lg font-medium tracking-tight">
             {SAMPLE_WEATHER}
@@ -197,14 +197,50 @@ export function LandingHero() {
           <p className="mt-0.5 text-xs text-forest-700/80">{t("heroSampleWeather")}</p>
         </PreviewCard>
 
-        <AnimatedPlant className="absolute top-[42%] right-[10%] h-[42%] w-auto drop-shadow-[0_12px_12px_rgba(22,54,38,0.10)]" />
+        <PreviewCard className="top-[30%] right-[3%] w-56 2xl:right-[6%]" delay={1.2} tilt={2.5}>
+          <p className="label-caps flex items-center gap-1.5 text-forest-600">
+            <Satellite className="size-3.5" />
+            {t("heroSatTag")}
+          </p>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <p className="font-mono text-lg font-medium tracking-tight">
+              0.41 <span className="text-sm text-clay-600">↓ 9%</span>
+            </p>
+            <svg viewBox="0 0 80 28" className="h-7 w-20" aria-hidden>
+              <motion.path
+                d="M2 6 L14 8 L26 7 L38 11 L50 14 L62 19 L78 23"
+                fill="none"
+                stroke="#a8621f"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 1.6, delay: 1.6, ease: EASE }}
+              />
+            </svg>
+          </div>
+          <p className="mt-0.5 text-xs text-forest-700/80">{t("heroSatBody")}</p>
+        </PreviewCard>
 
-        <PreviewCard className="top-[66%] right-[10%] w-64" delay={1.4} tilt={-2}>
+        <PreviewCard className="top-[60%] right-[6%] w-64 2xl:right-[10%]" delay={1.4} tilt={-2}>
           <p className="label-caps flex items-center gap-1.5 text-forest-600">
             <ListChecks className="size-3.5" />
             {t("doNext")}
           </p>
-          <p className="mt-2 flex items-start gap-2 text-sm leading-snug font-medium">
+          <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium">{t("heroSampleCause")}</span>
+            <span className="font-mono text-xs text-forest-700">82/100</span>
+          </div>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-forest-900/10">
+            <motion.div
+              className="h-full rounded-full bg-forest-700"
+              initial={{ width: 0 }}
+              animate={{ width: "82%" }}
+              transition={{ duration: 1.2, delay: 1.8, ease: EASE }}
+            />
+          </div>
+          <p className="mt-2.5 flex items-start gap-2 text-sm leading-snug font-medium">
             <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-forest-900 text-mint-100">
               <Check className="size-2.5" strokeWidth={3.5} />
             </span>

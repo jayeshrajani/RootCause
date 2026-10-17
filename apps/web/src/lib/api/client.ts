@@ -3,6 +3,7 @@ import type { ApiErrorBody, CropIdentification, TriageResponse } from "@/types/t
 import type { LocationOption } from "@/types/location";
 import type { Language } from "@/lib/i18n";
 import { fileExtension } from "@/lib/voice/audio";
+import { VISIT_HEADER, markLimitReached, recordInvestigation, visitId } from "@/lib/visit";
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
@@ -10,7 +11,7 @@ export const API_BASE_URL = (
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
-export type ApiErrorKind = "network" | "timeout" | "validation" | "server";
+export type ApiErrorKind = "network" | "timeout" | "validation" | "server" | "limit";
 
 export class ApiError extends Error {
   constructor(
@@ -57,6 +58,7 @@ export async function submitTriageReport(
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/triage`, {
       method: "POST",
+      headers: { [VISIT_HEADER]: visitId() },
       body: toFormData(values, language),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -73,6 +75,10 @@ export async function submitTriageReport(
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 429 && isApiErrorBody(body) && body.error.code === "investigation_limit") {
+      markLimitReached();
+      throw new ApiError("limit", body.error.message, [], 429);
+    }
     if (isApiErrorBody(body)) {
       const fieldErrors = body.error.details.flatMap((d) =>
         d.field ? [{ field: d.field, message: d.message }] : [],
@@ -88,6 +94,7 @@ export async function submitTriageReport(
     );
   }
 
+  recordInvestigation();
   return body as TriageResponse;
 }
 

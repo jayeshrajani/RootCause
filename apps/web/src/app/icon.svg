@@ -1,7 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="19" fill="#163626"/>
-  <path d="M31.5 45.5c-.2-12.1 6.1-22 19-25.4-.7 13-7.3 22-19 25.4Z" fill="#b6e0c4"/>
-  <path d="M31.5 45.5c.1-9.3-4.9-15.9-15.1-18.3.6 9.4 5.6 15.7 15.1 18.3Z" fill="#94cfa8"/>
-  <path d="M31.5 45.5v8" fill="none" stroke="#e6f4ea" stroke-linecap="round" stroke-width="3.5"/>
-  <circle cx="49.5" cy="14.5" r="4.5" fill="#e3a35f"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a5a42"/>
+      <stop offset="1" stop-color="#0e2318"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.35" r="0.6">
+      <stop offset="0" stop-color="#b6e0c4" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#b6e0c4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <rect width="64" height="64" rx="15" fill="url(#glow)"/>
+  <!-- soil line -->
+  <path d="M13 40.5h38" stroke="#b6e0c4" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
+  <!-- roots -->
+  <path d="M32 40.5v10.5M32 44.5l-7.5 6M32 44.5l7.5 6M32 48l-3.5 4.5M32 48l3.5 4.5" stroke="#e3a35f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- stem -->
+  <path d="M32 40.5V27" stroke="#e6f4ea" stroke-width="3" stroke-linecap="round"/>
+  <!-- leaves -->
+  <path d="M32 30C31.6 19.5 38.3 12.6 49 11.5c-.8 10.6-7.3 17.4-17 18.5Z" fill="#b6e0c4"/>
+  <path d="M32 33.5C32.2 25.8 27.6 20.6 19.5 19.5c.4 7.8 5 13 12.5 14Z" fill="#94cfa8"/>
+  <path d="M33.5 27.5 44.5 16.5" stroke="#2a5a42" stroke-opacity=".45" stroke-width="1.1" stroke-linecap="round"/>
+  <path d="M30.5 31 23.5 23.5" stroke="#2a5a42" stroke-opacity=".4" stroke-width="1" stroke-linecap="round"/>
 </svg>

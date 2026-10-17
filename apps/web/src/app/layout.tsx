@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Noto_Sans_Devanagari, Noto_Sans_Gurmukhi, Outfit } from "next/font/google";
 
+import { EntryGuard } from "@/components/app/entry-guard";
 import { MotionProvider } from "@/components/motion/motion-provider";
 import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${outfit.variable} ${geistMono.variable} ${devanagari.variable} ${gurmukhi.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <I18nProvider>
+          <EntryGuard />
           <MotionProvider>{children}</MotionProvider>
         </I18nProvider>
       </body>

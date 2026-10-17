@@ -1,4 +1,4 @@
-import type { Crop, SymptomDuration } from "@/types/triage";
+import type { Crop } from "@/types/triage";
 
 export const CROP_LABELS: Record<Crop, string> = {
   rice: "Rice",
@@ -46,27 +46,6 @@ export const CROP_SCIENTIFIC: Record<Crop, string> = {
   onion: "Allium cepa",
   chilli: "Capsicum annuum",
   other: "Not listed here",
-};
-
-export const SYMPTOM_PHRASES = [
-  "Yellowing leaves",
-  "Brown or black spots",
-  "Wilting or drooping",
-  "Holes in leaves",
-  "White or grey powder",
-  "Curling leaves",
-  "Dry, burnt edges",
-  "Stunted growth",
-  "Rotting stem or fruit",
-  "Insects visible",
-] as const;
-
-export const SYMPTOM_DURATION_LABELS: Record<SymptomDuration, string> = {
-  less_than_3_days: "Less than 3 days",
-  "3_to_7_days": "3 to 7 days",
-  "1_to_2_weeks": "1 to 2 weeks",
-  more_than_2_weeks: "More than 2 weeks",
-  not_sure: "Not sure",
 };
 
 // Must match apps/api settings (ROOTCAUSE_MAX_IMAGES / ROOTCAUSE_MAX_IMAGE_BYTES).

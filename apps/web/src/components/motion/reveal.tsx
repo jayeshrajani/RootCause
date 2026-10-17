@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { motion, type HTMLMotionProps } from "motion/react";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
@@ -30,7 +30,7 @@ export function Reveal({ delay = 0, y = 18, onView = false, children, ...props }
 
 interface RevealTextProps {
   text: string;
-  /** Words appended after `text`, revealed with a highlighter sweep styled by `accentClassName`. */
+  /** Words on their own line after `text`, revealed with a highlighter sweep styled by `accentClassName`. */
   accent?: string;
   accentClassName?: string;
   as?: "h1" | "h2" | "p";
@@ -62,8 +62,9 @@ export function RevealText({
           </>
         );
         return (
+          <Fragment key={`${word}-${i}`}>
+          {accent && i === lead.length ? <br /> : null}
           <span
-            key={`${word}-${i}`}
             aria-hidden
             className="-mt-[0.25em] -mb-[0.12em] inline-block overflow-hidden pt-[0.25em] pb-[0.2em] align-bottom"
           >
@@ -91,6 +92,7 @@ export function RevealText({
               )}
             </motion.span>
           </span>
+          </Fragment>
         );
       })}
     </Tag>

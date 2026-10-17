@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { LocateFixed } from "lucide-react";
 
@@ -23,7 +23,13 @@ async function permissionState(): Promise<PermissionState | "unknown"> {
 export function LocationPrompt({ location }: { location: FieldLocation }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const shareButton = useRef<HTMLButtonElement>(null);
   const { hasCoords, requestOnce } = location;
+
+  // Focus without scrolling the report underneath (autoFocus would jump the page on phones).
+  useEffect(() => {
+    if (open) shareButton.current?.focus({ preventScroll: true });
+  }, [open]);
 
   useEffect(() => {
     if (hasCoords || sessionStorage.getItem(ASKED_KEY) || !("geolocation" in navigator)) return;
@@ -80,8 +86,8 @@ export function LocationPrompt({ location }: { location: FieldLocation }) {
             <p className="mt-2 leading-relaxed text-muted-foreground">{t("locBody")}</p>
             <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
               <button
+                ref={shareButton}
                 type="button"
-                autoFocus
                 onClick={() => close(true)}
                 className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-forest-900 px-5 font-medium text-mint-100 transition-colors hover:bg-forest-700"
               >

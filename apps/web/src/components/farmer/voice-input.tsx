@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { useFormContext } from "react-hook-form";
 import { AlertCircle, Check, Mic, RotateCcw, Square, X } from "lucide-react";
 
@@ -28,6 +29,9 @@ const FAILURE_MESSAGES: Record<TranscriptionFailure, TranslationKey> = {
   network: "voiceFailed",
   failed: "voiceFailed",
 };
+
+// Decorative idle waveform bar heights (px).
+const WAVE = [8, 14, 22, 12, 18, 24, 10, 16, 20, 9, 15];
 
 type Phase =
   | { kind: "idle" }
@@ -150,13 +154,34 @@ export function VoiceInput({ onTranscribed }: { onTranscribed?: (transcript: str
           type="button"
           onClick={begin}
           disabled={recorder.status === "requesting"}
-          className="flex min-h-16 w-full items-center gap-4 rounded-lg border border-forest-900/15 bg-white/60 p-4 text-left transition-colors hover:border-forest-900/40 hover:bg-white disabled:cursor-wait"
+          className="group flex w-full flex-col items-center gap-5 rounded-[22px] px-4 py-8 text-center transition-colors hover:bg-white/60 disabled:cursor-wait"
         >
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-forest-900 text-mint-100">
-            <Mic className="size-5" aria-hidden />
+          <span className="relative flex size-28 items-center justify-center">
+            {[0, 1].map((ring) => (
+              <motion.span
+                key={ring}
+                aria-hidden
+                className="absolute inset-0 rounded-full border border-forest-700/30"
+                animate={{ scale: [1, 1.45], opacity: [0.6, 0] }}
+                transition={{ duration: 2.8, repeat: Infinity, delay: ring * 1.4, ease: "easeOut" }}
+              />
+            ))}
+            <span className="relative flex size-24 items-center justify-center rounded-full bg-forest-900 text-mint-100 shadow-[0_18px_40px_-16px_rgba(22,54,38,0.7)] transition-transform duration-300 group-hover:scale-105">
+              <Mic className="size-9" aria-hidden />
+            </span>
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block font-medium">
+          <span className="flex h-6 items-center gap-1" aria-hidden>
+            {WAVE.map((height, i) => (
+              <motion.span
+                key={i}
+                className="w-1 rounded-full bg-forest-700/35"
+                animate={{ height: [height * 0.4, height, height * 0.4] }}
+                transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.08, ease: "easeInOut" }}
+              />
+            ))}
+          </span>
+          <span className="space-y-1">
+            <span className="block text-lg font-medium">
               {phase.kind === "done" ? t("voiceRecordAgain") : t("recordVoice")}
             </span>
             <span className="block text-sm text-muted-foreground">

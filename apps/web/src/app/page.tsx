@@ -4,6 +4,7 @@ import { BotanicalPattern, LeafIllustration } from "@/components/brand/botanical
 import { Logo } from "@/components/brand/logo";
 import { PillLink } from "@/components/brand/pill";
 import { LandingHero } from "@/components/landing/landing-hero";
+import { UnderTheHood } from "@/components/landing/under-the-hood";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/reveal";
 import { useI18n } from "@/lib/i18n";
 
@@ -25,6 +26,7 @@ export default function HomePage() {
       <div className="relative bg-forest-900 p-2.5 sm:p-4">
         <BotanicalPattern className="text-mint-300/[0.09]" />
         <LandingHero />
+        <UnderTheHood />
       </div>
 
       <section id="principles" className="mx-auto max-w-6xl scroll-mt-6 px-5 py-24 sm:px-8 sm:py-32">

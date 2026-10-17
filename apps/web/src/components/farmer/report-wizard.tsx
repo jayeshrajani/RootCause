@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { FormProvider, useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +9,7 @@ import { AlertCircle, Camera, Sparkles } from "lucide-react";
 
 import { pillClass, PillIcon } from "@/components/brand/pill";
 import { AnalysingOverlay } from "@/components/farmer/analysing-overlay";
+import { InvestigationLimit } from "@/components/farmer/investigation-limit";
 import { CropConfirm } from "@/components/farmer/crop-confirm";
 import { ReportSteps } from "@/components/farmer/steps/report-steps";
 import { Spinner } from "@/components/ui/spinner";
@@ -22,7 +23,8 @@ import {
   type ReportFormValues,
 } from "@/lib/schemas/report";
 import { scrollToStep } from "@/lib/step-scroll";
-import { saveLatestTriage } from "@/lib/triage-storage";
+import { readLatestTriageRaw, saveLatestTriage } from "@/lib/triage-storage";
+import { INVESTIGATION_LIMIT, investigationsLeft } from "@/lib/visit";
 import type { Crop } from "@/types/triage";
 
 type FieldName = FieldPath<ReportFormInput>;
@@ -34,7 +36,10 @@ const ERROR_TITLES: Record<ApiError["kind"], string> = {
   timeout: "The analysis took too long",
   validation: "Please check your report",
   server: "Analysis didn't finish",
+  limit: "That's all for this visit",
 };
+
+const noSubscribe = () => () => {};
 
 // The last fresh visit we scrolled for; back/forward re-shows keep their scroll position.
 let scrolledFor: string | null = null;
@@ -53,6 +58,9 @@ function ReportForm({ visit }: { visit: string }) {
   // Set by a voice note: shown while analysing, and starts the triage once a photo is added.
   const [heard, setHeard] = useState<string | null>(null);
   const [waitingForPhoto, setWaitingForPhoto] = useState(false);
+  // Read from the visit cookie in the browser; the server render assumes a full allowance.
+  const left = useSyncExternalStore(noSubscribe, investigationsLeft, () => INVESTIGATION_LIMIT);
+  const [hitLimit, setHitLimit] = useState(false);
   const [submitError, setSubmitError] = useState<ApiError | null>(null);
   const [phase, setPhase] = useState<"identify" | "analyse">("analyse");
   const [cropQuestion, setCropQuestion] = useState<{
@@ -89,6 +97,10 @@ function ReportForm({ visit }: { visit: string }) {
 
   const submit = handleSubmit(async (values) => {
     setSubmitError(null);
+    if (investigationsLeft() === 0) {
+      setHitLimit(true);
+      return;
+    }
     try {
       const crop = await resolveCrop(values);
       setPhase("analyse");
@@ -101,6 +113,10 @@ function ReportForm({ visit }: { visit: string }) {
         error instanceof ApiError
           ? error
           : new ApiError("server", "Something unexpected went wrong. Please try again.");
+      if (apiError.kind === "limit") {
+        setHitLimit(true);
+        return;
+      }
       for (const { field, message } of apiError.fieldErrors) {
         if (FIELDS.has(field)) setError(field as FieldName, { type: "server", message });
       }
@@ -136,6 +152,10 @@ function ReportForm({ visit }: { visit: string }) {
     ? { latitude: getValues("latitude"), longitude: getValues("longitude") }
     : null;
 
+  if (hitLimit || left === 0) {
+    return <InvestigationLimit hasResult={readLatestTriageRaw() !== null} />;
+  }
+
   return (
     <FormProvider {...form}>
       <AnimatePresence>
@@ -163,16 +183,38 @@ function ReportForm({ visit }: { visit: string }) {
       <form
         onSubmit={(e) => void submit(e)}
         noValidate
-        className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-6 sm:pt-8 lg:px-8"
+        className="mx-auto w-full max-w-6xl px-3 pt-3 pb-28 sm:px-6 sm:pt-6 lg:px-8 lg:pb-16"
       >
-        <h1 className="text-3xl leading-tight font-medium sm:text-4xl">{t("reportHeading")}</h1>
-        <p className="mt-2 mb-6 text-muted-foreground sm:mb-8 sm:text-lg">{t("reportLead")}</p>
-
         <ReportSteps
+          intro={
+            <>
+              <div className="lg:flex lg:items-end lg:justify-between lg:gap-10">
+                <h1 className="max-w-[16ch] text-[clamp(2.1rem,6vw,3.25rem)] leading-[1] font-medium tracking-[-0.035em] text-balance lg:max-w-none">
+                  {t("reportHeading")}
+                </h1>
+                <p className="mt-4 max-w-[46ch] text-forest-900/70 sm:text-lg lg:mt-0 lg:max-w-[34ch] lg:text-base">
+                  {t("reportLead")}
+                </p>
+              </div>
+            </>
+          }
+          meter={
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/60 px-3 py-1.5 font-mono text-[11px] text-forest-700 backdrop-blur-sm">
+              <span className="flex gap-1" aria-hidden>
+                {Array.from({ length: INVESTIGATION_LIMIT }, (_, i) => (
+                  <span
+                    key={i}
+                    className={i < left ? "size-1.5 rounded-full bg-forest-700" : "size-1.5 rounded-full bg-forest-900/15"}
+                  />
+                ))}
+              </span>
+              {left} {t(left === 1 ? "investigationLeft" : "investigationsLeft")}
+            </span>
+          }
           onTranscribed={onTranscribed}
           voiceNotice={
             waitingForPhoto ? (
-              <p role="status" className="flex items-center gap-2 text-sm font-medium text-clay-600">
+              <p role="status" className="flex items-center justify-center gap-2 text-sm font-medium text-clay-600">
                 <Camera className="size-4 shrink-0" aria-hidden />
                 {t("voiceNeedPhoto")}
               </p>
@@ -187,7 +229,7 @@ function ReportForm({ visit }: { visit: string }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="mt-8 flex gap-3 rounded-2xl border border-destructive/25 bg-destructive/5 p-4 text-sm"
+              className="mt-6 flex gap-3 rounded-2xl border border-destructive/25 bg-destructive/5 p-4 text-sm"
             >
               <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
               <div>
@@ -198,12 +240,14 @@ function ReportForm({ visit }: { visit: string }) {
           ) : null}
         </AnimatePresence>
 
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-forest-900/10 bg-background/80 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-6xl justify-end px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
+        {/* Inline on desktop; a thumb-reachable bar on phones. */}
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-forest-900/10 bg-background/80 backdrop-blur-xl lg:static lg:mt-8 lg:border-0 lg:bg-transparent lg:backdrop-blur-none">
+          <div className="mx-auto flex max-w-6xl items-center justify-end gap-6 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-0 lg:py-0">
+            <p className="hidden text-sm text-muted-foreground lg:block">{t("reportReady")}</p>
             <button
               type="submit"
               disabled={formState.isSubmitting}
-              className={pillClass("dark", "w-full justify-between sm:w-auto")}
+              className={pillClass("dark", "w-full justify-between sm:w-auto lg:h-16 lg:pl-8 lg:text-lg")}
             >
               {t("getTriage")}
               <PillIcon>
