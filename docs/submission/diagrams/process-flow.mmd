@@ -1,0 +1,29 @@
+flowchart TD
+    A([Farmer opens RootCause]) --> B{"Share location?<br/><i>Where's the patient?</i>"}
+    B -- Yes --> C[GPS fix]
+    B -- Not now --> C2[Optional village search]
+    C --> D
+    C2 --> D
+    D["Step 1: Photo<br/>camera, gallery or sample"] --> E["Step 2: Voice note<br/>English / Hindi, auto-detected"]
+    E -->|"Gemini Flash-Lite<br/>transcribes"| F
+    D -->|"or tap Get crop guidance"| F
+    F{"Visit allowance<br/>5 investigations"} -- Used up --> Z(["Chai-break screen"])
+    F -- OK --> G["Stage 1: Crop ID<br/>Gemini Flash + confidence gate"]
+    G -- unsure --> H[/"Which crop is this?"/] --> I
+    G -- confident --> I
+    I["Stage 2: Evidence gathering (parallel)"] --> I1["Gemini vision:<br/>observations + causes"]
+    I --> I2["Open-Meteo:<br/>past 7 days at the field"]
+    I --> I3["Earth Engine:<br/>Sentinel-2 NDVI / NDMI, 45 days"]
+    I --> I4["Gemini Embedding 2 + FAISS:<br/>nearest reference photos (GCS)"]
+    I1 & I2 & I3 & I4 --> J["Evidence ledger<br/>0-100 fit per cause"]
+    J --> K{"Filter"}
+    K -- "fit < 50" --> K1[Hidden]
+    K -- "top > 75" --> K2[Stands alone]
+    K -- "50-75" --> K3[Ranked shortlist]
+    K2 & K3 --> L["Results"]
+    L --> L1["Listen<br/>Gemini TTS"]
+    L --> L2["Possible causes<br/>for / against"]
+    L --> L3["Do next"]
+    L --> L4["Treat it<br/>practices, generic actives, safety"]
+    L4 --> L5["Nearby agri shops<br/>Gemini x Google Maps"]
+    L --> L6["Translate<br/>EN, HI, PA, ES, FR"]

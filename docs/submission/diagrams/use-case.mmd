@@ -1,0 +1,19 @@
+flowchart LR
+    farmer(("Farmer"))
+    expert(("KVK / agri<br/>officer"))
+    dealer(("Agri-input<br/>dealer"))
+    subgraph RootCause
+      uc1([Report a sick crop with a photo])
+      uc2([Describe it by voice, Hindi or English])
+      uc3([Share field location])
+      uc4([Confirm the crop when asked])
+      uc5([Read the triage: cause, urgency, evidence])
+      uc6([Listen to the result aloud])
+      uc7([Switch result language])
+      uc8([Get safe treatment guidance])
+      uc9([Find nearby agri shops on Maps])
+      uc10([Try a sample photo])
+    end
+    farmer --- uc1 & uc2 & uc3 & uc4 & uc5 & uc6 & uc7 & uc8 & uc9 & uc10
+    uc8 -. "confirm before spraying" .-> expert
+    uc9 -. "show active ingredient" .-> dealer

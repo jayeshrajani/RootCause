@@ -1,0 +1,11 @@
+flowchart LR
+    P["Photos + farmer's words"] --> M["Gemini analysis score<br/>0-100 per cause"]
+    P --> E["Gemini Embedding 2<br/>vectors of the photos"] --> N["FAISS top matches<br/>vs 763 labelled references"] --> RS["Reference vote<br/>0-100 per cause"]
+    WX["7-day weather"] --> WP["Rule points<br/>(bounded, with reason)"]
+    SAT["Sentinel-2 NDVI/NDMI"] --> SP["Rule points<br/>(bounded, with reason)"]
+    M --> B["Blend<br/>model x (100-w) + reference x w<br/>w: rice 30, potato 20, tomato 10"]
+    RS --> B
+    B --> F["Evidence fit 0-100"]
+    WP --> F
+    SP --> F
+    F --> T{"< 50 hide<br/>> 75 stands alone"}

@@ -1,0 +1,36 @@
+flowchart TB
+    U(["Farmer's phone / browser"])
+    subgraph WEB["Cloud Run · rootcause-web"]
+      W["Next.js 16 · photo-first report · voice orb · results tabs<br/>5-investigation visit cookie · 5 languages"]
+    end
+    subgraph API["Cloud Run · rootcause-api (FastAPI)"]
+      direction TB
+      EP["/triage/identify · /triage · /transcribe · /speak<br/>/triage/treatment · /places/agri-shops · /triage/translate"]
+      O["Orchestrator<br/>model fallback chains · priority → fallback key failover<br/>per-visit + per-IP limits · in-memory, nothing stored"]
+      S["Evidence scorer<br/>0-100 fit = model read ⊕ reference vote ⊕ weather pts ⊕ satellite pts"]
+      EP --> O --> S
+    end
+    subgraph GAI["Google AI (Gemini API)"]
+      direction LR
+      G1["Gemini Flash<br/>vision → strict JSON"]
+      G2["Gemini Flash-Lite<br/>speech-to-text"]
+      G3["Gemini TTS<br/>read-aloud"]
+      G4["Gemini × Google Maps<br/>grounded shop search"]
+      G5["Gemini Embedding 2<br/>768-d image vectors"]
+    end
+    subgraph GC["Google Cloud"]
+      direction LR
+      EE["Earth Engine<br/>Sentinel-2 L2A NDVI/NDMI"]
+      GCS[("Cloud Storage<br/>datasets + FAISS index")]
+      SM["Secret Manager"]
+      CB["Cloud Build ·<br/>Artifact Registry"]
+    end
+    EXT["Open-Meteo weather · Cerebras Qwen (last-resort fallback)"]
+    U --> W -->|HTTPS| EP
+    O --> GAI
+    S --> EE
+    S --> G5
+    GCS -->|mounted read-only| S
+    S --> EXT
+    SM -.-> API
+    CB -.-> WEB & API
