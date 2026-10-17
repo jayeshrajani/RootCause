@@ -60,7 +60,8 @@ class GeminiSpeechSynthesizer:
     async def synthesize(self, text: str) -> bytes:
         """WAV audio for `text`, spoken in whatever language it is written in."""
         body = {
-            "contents": [{"parts": [{"text": f"Say in a warm, calm, clear voice: {text}"}]}],
+            # Only the words to speak: TTS models read any style instruction aloud too.
+            "contents": [{"parts": [{"text": text}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {

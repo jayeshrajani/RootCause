@@ -60,7 +60,7 @@ def test_reads_text_aloud_as_wav() -> None:
     body = json.loads(sent[0].content)
     assert sent[0].url.path.endswith("/gemini-3.8-flash-lite-tts:generateContent")
     assert body["generationConfig"]["responseModalities"] == ["AUDIO"]
-    assert "अगेती झुलसा" in body["contents"][0]["parts"][0]["text"]
+    assert body["contents"][0]["parts"][0]["text"] == "आलू पर अगेती झुलसा की संभावना है।"
 
 
 async def test_raw_pcm_is_wrapped_as_wav() -> None:
