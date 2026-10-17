@@ -4,21 +4,21 @@
 substitutions:
   _REGION: asia-south1
   _REPO: rootcause
-  _API_SA: rootcause-api
+  _API_SA: rootcause
   _API_URL: ""
   _WEB_URL: ""
 
 steps:
   - id: build-api
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA", apps/api]
+    args: [build, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$BUILD_ID", apps/api]
   - id: build-web
     name: gcr.io/cloud-builders/docker
     args:
       - build
       - --build-arg=NEXT_PUBLIC_API_BASE_URL=${_API_URL}
       - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$BUILD_ID
       - apps/web
   - id: push
     name: gcr.io/cloud-builders/docker
@@ -26,8 +26,8 @@ steps:
     args:
       - -c
       - |
-        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA &&
-        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA
+        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$BUILD_ID &&
+        docker push ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$BUILD_ID
   - id: deploy-api
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -35,7 +35,7 @@ steps:
       - run
       - deploy
       - rootcause-api
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$BUILD_ID
       - --region=${_REGION}
       - --service-account=${_API_SA}@$PROJECT_ID.iam.gserviceaccount.com
       - --allow-unauthenticated
@@ -54,7 +54,7 @@ steps:
       - run
       - deploy
       - rootcause-web
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$BUILD_ID
       - --region=${_REGION}
       - --allow-unauthenticated
       - --cpu=1
@@ -62,5 +62,5 @@ steps:
       - --min-instances=0
 
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$BUILD_ID
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/web:$BUILD_ID

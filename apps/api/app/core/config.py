@@ -6,7 +6,9 @@ from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _API_DIR = Path(__file__).resolve().parents[2]
-_REPO_ROOT = _API_DIR.parents[1]
+# In the source checkout this is ``<repo>/apps/api``; the container only copies
+# the API package to ``/app`` and gets configuration from Cloud Run env vars.
+_REPO_ROOT = _API_DIR.parents[1] if len(_API_DIR.parents) > 1 else _API_DIR
 
 MEBIBYTE = 1024 * 1024
 

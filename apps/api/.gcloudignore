@@ -1,0 +1,21 @@
+# Keep local environments and reference data out of direct API source uploads.
+.gcloudignore
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+data/*
+!data/manifests/
+!data/manifests/**
+tests/
