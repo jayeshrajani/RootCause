@@ -19,7 +19,7 @@ to proceed on a required step).
 | 1B. DINOv2 embedding pipeline | COMPLETE | Determinism, normalisation, cache and checksum tests pass |
 | 1C. FAISS retrieval and evaluation | COMPLETE | Evaluation now reports field vs lab queries and macro recall |
 | 1D. Cloud persistence (GCS, Firestore) | **DEFERRED by team decision** | Not failed. Plan in [cloud-readiness.md](cloud-readiness.md); needs C1–C3, D1, D3 |
-| 1E. Cloud Run readiness | DEFERRED (execution) | Company laptop: no Docker or GCP access. Planning documented; no Dockerfile yet |
+| 1E. Cloud Run readiness | PARTIAL | API image includes retrieval (CPU torch); data mounted from a bucket ([deploy/README.md](../deploy/README.md)). Build and deploy not yet run (needs a personal machine with GCP access) |
 | 1F. Firebase readiness | DEFERRED (deployment) | Rendering review done (D4); static-export build test pending |
 | 1G. Integration handoff | COMPLETE | Public API verified end to end for all three crops; HTTP endpoint pending D2 |
 | Tomato retrieval quality | PARTIAL | Investigated; isolated experiments run; no production change yet (needs approval) |

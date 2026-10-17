@@ -1,7 +1,8 @@
 # Deploying to Google Cloud Run
 
-Two services: `rootcause-api` (FastAPI) and `rootcause-web` (Next.js). Reference retrieval
-(DINOv2/FAISS) is not included yet; see [docs/cloud-readiness.md](../docs/cloud-readiness.md).
+Two services: `rootcause-api` (FastAPI, including DINOv2/FAISS reference retrieval) and
+`rootcause-web` (Next.js). Reference data is mounted read-only from a private bucket; see
+[docs/cloud-readiness.md](../docs/cloud-readiness.md) for the longer-term plan.
 Nothing here has been run yet (no Docker or gcloud on the authoring machine).
 
 ## One-time setup
@@ -33,6 +34,33 @@ done
 The Cloud Build service account also needs `roles/run.admin`, `roles/iam.serviceAccountUser` on
 `$SA`, and `roles/artifactregistry.writer`.
 
+### Reference data bucket (DINOv2 weights + FAISS index + reference photos, ~211 MB)
+
+```bash
+BUCKET=$PROJECT-rootcause-data
+gcloud storage buckets create gs://$BUCKET --location=$REGION \
+  --uniform-bucket-level-access --public-access-prevention
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET \
+  --member=serviceAccount:$SA --role=roles/storage.objectViewer
+```
+
+Upload these folders from the local `ROOTCAUSE_DATA_DIR`, keeping their paths (the API reads the
+bucket as its data directory, so no index rebuild is needed):
+
+| Bucket path | Contents |
+| --- | --- |
+| `models/dinov2-small/<revision>/` | Weights (`model.safetensors`, configs), SHA-256 checked at load |
+| `artifacts/faiss/dinov2-small/v1/` | FAISS index, metadata, `index_manifest.json` |
+| `references/images/` | 763 reference photos |
+
+```bash
+gcloud storage cp -r <data-dir>/models/dinov2-small gs://$BUCKET/models/
+gcloud storage cp -r <data-dir>/artifacts <data-dir>/references gs://$BUCKET/
+```
+
+Another bucket name or index version: pass `_DATA_BUCKET=...` / `_INDEX_VERSION=...` as
+substitutions. Missing or invalid data never blocks startup; triage runs without references.
+
 ## Deploy
 
 The web bundle needs the API URL and the API needs the web URL, so deploy twice the first time:
@@ -46,7 +74,8 @@ gcloud builds submit --config deploy/cloudbuild.yaml \
   --substitutions=_API_URL=<api-url>,_WEB_URL=<web-url>
 ```
 
-Verify: `curl <api-url>/health` should report `analysis_mode: ai` and `satellite_imagery: configured`.
+Verify: `curl <api-url>/api/v1/health` should report `analysis_mode: ai`,
+`satellite_imagery: configured` and, about 30–60 s after a cold start, `reference_photos: ready`.
 
 ## Before going public
 
