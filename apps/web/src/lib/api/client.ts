@@ -1,5 +1,5 @@
 import type { ReportFormValues } from "@/lib/schemas/report";
-import type { ApiErrorBody, CropIdentification, TriageResponse } from "@/types/triage";
+import type { ApiErrorBody, CropIdentification, Shop, TreatmentPlan, TriageResponse } from "@/types/triage";
 import type { LocationOption } from "@/types/location";
 import type { Language } from "@/lib/i18n";
 import { fileExtension } from "@/lib/voice/audio";
@@ -254,4 +254,39 @@ export async function speakText(text: string, signal?: AbortSignal): Promise<Blo
   });
   if (!response.ok) throw new Error(`Read-aloud failed (HTTP ${response.status})`);
   return response.blob();
+}
+
+async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: withTimeout(signal, 45_000),
+  });
+  const data: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new ApiError(
+      response.status >= 500 ? "server" : "validation",
+      isApiErrorBody(data) ? data.error.message : `HTTP ${response.status}`,
+      [],
+      response.status,
+    );
+  }
+  return data as T;
+}
+
+/** Generic, label-first treatment guidance for the likely cause (never brands or doses). */
+export function fetchTreatment(
+  request: { crop: string; cause: string; evidence_fit_score: number | null; response_language: string },
+  signal?: AbortSignal,
+): Promise<TreatmentPlan> {
+  return postJson<TreatmentPlan>("/triage/treatment", request, signal);
+}
+
+/** Agri-input shops near the field, from Google Maps via Gemini. */
+export async function fetchAgriShops(
+  where: { latitude: number; longitude: number } | { place: string },
+  signal?: AbortSignal,
+): Promise<Shop[]> {
+  return (await postJson<{ shops: Shop[] }>("/places/agri-shops", where, signal)).shops;
 }

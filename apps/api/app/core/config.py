@@ -97,6 +97,12 @@ class Settings(BaseSettings):
     )
     tts_voice: str = "Kore"
     tts_requests_per_ip_hour: int = Field(default=120, ge=0)
+    # Treatment guidance and nearby-shop search after a triage (Gemini; shops grounded on Maps).
+    assist_enabled: bool = True
+    shop_search_models: list[str] = Field(
+        default_factory=lambda: ["gemini-flash-lite-latest", "gemini-flash-latest"]
+    )
+    assist_requests_per_ip_hour: int = Field(default=120, ge=0)
     speech_provider: Literal["auto", "gemini", "google"] = "auto"
     speech_gemini_model: str = "gemini-flash-lite-latest"
     # Speech-to-Text V2. Project defaults to GOOGLE_CLOUD_PROJECT_ID; credentials come from

@@ -217,3 +217,28 @@ export interface ApiErrorBody {
     details: { field: string | null; message: string }[];
   };
 }
+
+export interface ActiveIngredient {
+  name: string;
+  kind: "fungicide" | "insecticide" | "bactericide" | "biological" | "nutrient" | "other";
+  note: string;
+}
+
+export interface TreatmentPlan {
+  crop: string;
+  cause: string;
+  confirm_first: boolean;
+  non_chemical_steps: string[];
+  active_ingredients: ActiveIngredient[];
+  safety: string[];
+  expert_note: string;
+  response_language: ResponseLanguage;
+}
+
+export interface Shop {
+  name: string;
+  address: string | null;
+  offers: string | null;
+  maps_uri: string | null;
+  place_id: string | null;
+}

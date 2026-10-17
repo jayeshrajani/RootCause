@@ -260,6 +260,24 @@ browser tab and always translates from the original result.
 | 502 | `translation_unavailable` | The AI provider failed or changed the result's structure (after one retry) |
 | 503 | `translation_unavailable` | AI analysis is not configured (mock mode results are English only) |
 
+## `POST /triage/treatment`
+
+Generic, label-first treatment guidance for the likely cause, shown on the results page's
+"Treat it" tab: non-chemical steps first, then up to four generic **active ingredients** (never
+brands or doses), safety points and a note to confirm with the local KVK or agriculture officer.
+`confirm_first` is true unless `evidence_fit_score` is above 75. Uses the triage model chain
+(priority key, fallback key, then Cerebras). Capped per IP (`ROOTCAUSE_ASSIST_REQUESTS_PER_IP_HOUR`).
+
+JSON body: `{ "crop": "potato", "cause": "Late blight", "evidence_fit_score": 82, "response_language": "hi" }`.
+
+## `POST /places/agri-shops`
+
+Up to five agri-input shops or Krishi Vigyan Kendras near the field, from **Gemini grounded on
+Google Maps** (works with the Gemini API key; no Maps key). Only places returned by Maps grounding
+are listed, each with its Google Maps link and place id. JSON body: `{ "latitude": 18.52,
+"longitude": 73.86 }` or `{ "place": "Nashik, Maharashtra" }`. 422 `location_required` without
+either; 502 `shops_failed` if every key and model failed.
+
 ## `POST /speak`
 
 Reads text aloud with Gemini text-to-speech (`gemini-3.8-flash-lite-tts`, falling back to

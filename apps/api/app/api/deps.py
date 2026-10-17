@@ -5,6 +5,7 @@ from fastapi import Depends, Request
 from app.core.config import Settings, get_settings
 from app.integrations.cerebras import CerebrasClient
 from app.integrations.gemini import GeminiClient, GeminiRateLimitError
+from app.integrations.gemini_maps import GeminiMapsShopFinder
 from app.integrations.gemini_speech import GeminiSpeechClient
 from app.integrations.gemini_tts import GeminiSpeechSynthesizer
 from app.integrations.google_speech import GoogleSpeechClient, SpeechRecognizer
@@ -12,6 +13,7 @@ from app.integrations.open_meteo import OpenMeteoClient
 from app.integrations.vision import FallbackVisionModel, VisionModel
 from app.services.satellite import SatelliteService
 from app.services.transcription import FallbackRecognizer, TranscriptionService
+from app.services.treatment import TreatmentAdvisor
 from app.services.triage import AiTriageService, MockTriageService, TriageService
 from app.services.triage.identify import CropIdentifier, CropSimilaritySource
 from app.services.triage.references import ReferenceProvider
@@ -52,6 +54,24 @@ def get_speak_limiter(request: Request, settings: SettingsDep) -> InvestigationL
         )
         request.app.state.speak_limiter = limiter
     return limiter
+
+
+def get_assist_limiter(request: Request, settings: SettingsDep) -> InvestigationLimiter:
+    limiter: InvestigationLimiter | None = getattr(request.app.state, "assist_limiter", None)
+    if limiter is None:
+        limiter = InvestigationLimiter(
+            session_limit=0, ip_limit_per_hour=settings.assist_requests_per_ip_hour
+        )
+        request.app.state.assist_limiter = limiter
+    return limiter
+
+
+def get_shop_finder(settings: SettingsDep) -> GeminiMapsShopFinder | None:
+    if not settings.assist_enabled or not settings.gemini_api_keys:
+        return None
+    return GeminiMapsShopFinder(
+        api_keys=settings.gemini_api_keys, models=settings.shop_search_models
+    )
 
 
 _synthesizers: dict[tuple[object, ...], GeminiSpeechSynthesizer] = {}
@@ -152,6 +172,11 @@ def get_crop_identifier(
         reference_provider if isinstance(reference_provider, CropSimilaritySource) else None
     )
     return CropIdentifier(vision_model(settings), references)
+
+
+def get_treatment_advisor(settings: SettingsDep) -> TreatmentAdvisor | None:
+    client = vision_model(settings) if settings.assist_enabled else None
+    return TreatmentAdvisor(client) if client is not None else None
 
 
 def get_triage_translator(settings: SettingsDep) -> TriageTranslator | None:
