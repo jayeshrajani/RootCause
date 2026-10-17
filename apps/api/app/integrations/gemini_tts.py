@@ -42,7 +42,7 @@ class GeminiSpeechSynthesizer:
     def __init__(
         self,
         *,
-        api_key: str,
+        api_keys: Sequence[str],
         models: Sequence[str] = ("gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"),
         voice: str = "Kore",
         base_url: str = "https://generativelanguage.googleapis.com/v1beta",
@@ -50,7 +50,7 @@ class GeminiSpeechSynthesizer:
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.models = list(models)
-        self._api_key = api_key
+        self._api_keys = list(api_keys)
         self._voice = voice
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
@@ -70,7 +70,13 @@ class GeminiSpeechSynthesizer:
             },
         }
         last = "no model configured"
-        for model in self.models:
+        # Every model on the priority key, then every model on the fallback key.
+        attempts = [
+            (number, key, model)
+            for number, key in enumerate(self._api_keys, start=1)
+            for model in self.models
+        ]
+        for index, (key_number, api_key, model) in enumerate(attempts):
             for attempt in range(2):
                 if attempt:
                     await asyncio.sleep(self._retry_delay)
@@ -83,29 +89,33 @@ class GeminiSpeechSynthesizer:
                     ) as client:
                         response = await client.post(
                             f"{self._base_url}/models/{model}:generateContent",
-                            headers={"x-goog-api-key": self._api_key},
+                            headers={"x-goog-api-key": api_key},
                             json=body,
                         )
                 except httpx.HTTPError as exc:
-                    last = f"{model}: {type(exc).__name__}"
+                    last = f"key {key_number} {model}: {type(exc).__name__}"
                     break
                 if response.status_code == 200:
                     try:
                         part = response.json()["candidates"][0]["content"]["parts"][0]
                         audio = base64.b64decode(part["inlineData"]["data"])
                     except (ValueError, KeyError, IndexError, TypeError) as exc:
-                        last = f"{model}: unexpected payload ({type(exc).__name__})"
+                        last = (
+                            f"key {key_number} {model}: unexpected payload ({type(exc).__name__})"
+                        )
                         break
                     logger.info(
-                        "Gemini TTS model=%s characters=%d audio_bytes=%d elapsed_ms=%d",
+                        "Gemini TTS key=%d model=%s characters=%d audio_bytes=%d elapsed_ms=%d",
+                        key_number,
                         model,
                         len(text),
                         len(audio),
                         (time.perf_counter() - started) * 1000,
                     )
                     return _as_wav(audio)
-                last = f"{model}: HTTP {response.status_code}"
+                last = f"key {key_number} {model}: HTTP {response.status_code}"
                 if response.status_code not in _RETRY_STATUSES:
                     break
-            logger.warning("Gemini TTS failed, trying the next model: %s", last)
+            if index < len(attempts) - 1:
+                logger.warning("Gemini TTS failed, trying the next model or key: %s", last)
         raise SpeechSynthesisError(last)

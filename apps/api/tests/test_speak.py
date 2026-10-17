@@ -25,7 +25,7 @@ def audio_response(data: bytes) -> httpx.Response:
 
 
 def synthesizer(handler: Handler) -> GeminiSpeechSynthesizer:
-    client = GeminiSpeechSynthesizer(api_key="k", transport=httpx.MockTransport(handler))
+    client = GeminiSpeechSynthesizer(api_keys=["k"], transport=httpx.MockTransport(handler))
     client._retry_delay = 0
     return client
 
@@ -106,3 +106,22 @@ def test_per_ip_cap() -> None:
     codes = [client.post("/api/v1/speak", json={"text": "Hi"}).status_code for _ in range(3)]
 
     assert codes == [200, 200, 429]
+
+
+async def test_falls_back_to_the_second_key() -> None:
+    keys: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        keys.append(request.headers["x-goog-api-key"])
+        return (
+            audio_response(WAV)
+            if request.headers["x-goog-api-key"] == "second"
+            else httpx.Response(403)
+        )
+
+    client = GeminiSpeechSynthesizer(
+        api_keys=["first", "second"], models=["tts"], transport=httpx.MockTransport(handler)
+    )
+
+    assert await client.synthesize("Hello") == WAV
+    assert keys == ["first", "second"]

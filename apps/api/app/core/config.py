@@ -39,9 +39,18 @@ class Settings(BaseSettings):
     analysis_provider: Literal["auto", "mock"] = "auto"
     analysis_timeout_seconds: float = Field(default=45, gt=0)
 
+    # Priority key, then an optional second key tried when calls on the first one fail.
     gemini_api_key: SecretStr | None = Field(
         default=None,
-        validation_alias=AliasChoices("GEMINI_API_KEY", "ROOTCAUSE_GEMINI_API_KEY"),
+        validation_alias=AliasChoices(
+            "GEMINI_API_KEY_PRIORITY", "GEMINI_API_KEY", "ROOTCAUSE_GEMINI_API_KEY"
+        ),
+    )
+    gemini_api_key_fallback: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "GEMINI_API_KEY_FALLBACK", "ROOTCAUSE_GEMINI_API_KEY_FALLBACK"
+        ),
     )
     gemini_model: str = "gemini-flash-latest"
     gemini_rate_limit_fallback_model: str = "gemini-3-flash-preview"
@@ -107,9 +116,7 @@ class Settings(BaseSettings):
     @property
     def speech_uses_gemini(self) -> bool:
         return (
-            self.speech_enabled
-            and self.speech_provider != "google"
-            and self.gemini_api_key is not None
+            self.speech_enabled and self.speech_provider != "google" and bool(self.gemini_api_keys)
         )
 
     @property
@@ -127,8 +134,18 @@ class Settings(BaseSettings):
         return self.satellite_enabled and bool(self.google_cloud_project_id)
 
     @property
+    def gemini_api_keys(self) -> list[str]:
+        """Gemini keys in the order to try them (priority first), without duplicates."""
+        keys: list[str] = []
+        for secret in (self.gemini_api_key, self.gemini_api_key_fallback):
+            value = secret.get_secret_value().strip() if secret else ""
+            if value and value not in keys:
+                keys.append(value)
+        return keys
+
+    @property
     def use_gemini(self) -> bool:
-        return self.analysis_provider != "mock" and self.gemini_api_key is not None
+        return self.analysis_provider != "mock" and bool(self.gemini_api_keys)
 
     @property
     def use_cerebras(self) -> bool:

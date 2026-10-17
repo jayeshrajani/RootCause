@@ -597,3 +597,48 @@ def test_triage_route_forwards_requested_output_language() -> None:
     assert response.status_code == 200
     assert response.json()["response_language"] == "pa"
     assert "Requested output language: Punjabi" in sent[0]["contents"][0]["parts"][0]["text"]
+
+
+def test_gemini_key_names_and_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY_PRIORITY", "first")
+    monkeypatch.setenv("GEMINI_API_KEY_FALLBACK", "second")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.gemini_api_keys == ["first", "second"]
+    assert settings.use_gemini
+    assert Settings(
+        gemini_api_key="same", gemini_api_key_fallback="same", _env_file=None
+    ).gemini_api_keys == ["same"]
+
+    monkeypatch.delenv("GEMINI_API_KEY_PRIORITY")
+    assert Settings(gemini_api_key_fallback="only", _env_file=None).gemini_api_keys == ["only"]
+
+
+async def test_fallback_key_is_used_when_the_priority_key_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.api.deps import vision_model
+    from app.integrations.gemini import GeminiClient, GeminiError
+
+    calls: list[tuple[str, str]] = []
+
+    async def fake(self: GeminiClient, **_: Any) -> str:
+        calls.append((self._api_key, self.model))
+        if self._api_key == "first":
+            raise GeminiError("Model API returned HTTP 403")
+        return "{}"
+
+    monkeypatch.setattr(GeminiClient, "structured_completion", fake)
+    model = vision_model(
+        Settings(gemini_api_key="first", gemini_api_key_fallback="second", _env_file=None)
+    )
+    assert model is not None
+
+    output = await model.structured_completion(
+        system="s", text="t", images=[], schema_name="x", schema={}
+    )
+
+    assert output == "{}"
+    assert calls == [("first", "gemini-flash-latest"), ("second", "gemini-flash-latest")]

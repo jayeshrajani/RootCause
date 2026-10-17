@@ -58,13 +58,13 @@ _synthesizers: dict[tuple[object, ...], GeminiSpeechSynthesizer] = {}
 
 
 def get_speech_synthesizer(settings: SettingsDep) -> GeminiSpeechSynthesizer | None:
-    if not settings.tts_enabled or settings.gemini_api_key is None:
+    api_keys = settings.gemini_api_keys
+    if not settings.tts_enabled or not api_keys:
         return None
-    api_key = settings.gemini_api_key.get_secret_value()
-    key = (api_key, tuple(settings.tts_models), settings.tts_voice)
+    key = (tuple(api_keys), tuple(settings.tts_models), settings.tts_voice)
     if key not in _synthesizers:
         _synthesizers[key] = GeminiSpeechSynthesizer(
-            api_key=api_key, models=settings.tts_models, voice=settings.tts_voice
+            api_keys=api_keys, models=settings.tts_models, voice=settings.tts_voice
         )
     return _synthesizers[key]
 
@@ -97,31 +97,34 @@ def _cerebras_client(settings: Settings) -> CerebrasClient | None:
     )
 
 
-def _gemini_client(settings: Settings, *, model: str | None = None) -> GeminiClient | None:
-    if not settings.use_gemini or settings.gemini_api_key is None:
-        return None
-    return GeminiClient(
-        api_key=settings.gemini_api_key.get_secret_value(),
-        model=model or settings.gemini_model,
-        timeout_seconds=settings.analysis_timeout_seconds,
+def _gemini_chain(settings: Settings, api_key: str) -> VisionModel:
+    """One key's models: the configured model, then the rate-limit model on a 429."""
+
+    def client(model: str) -> GeminiClient:
+        return GeminiClient(
+            api_key=api_key, model=model, timeout_seconds=settings.analysis_timeout_seconds
+        )
+
+    return FallbackVisionModel(
+        client(settings.gemini_model),
+        client(settings.gemini_rate_limit_fallback_model),
+        fallback_on=GeminiRateLimitError,
     )
 
 
 def vision_model(settings: Settings) -> VisionModel | None:
-    """The configured multimodal model, or None for the labelled mock."""
-    primary: VisionModel | None = _gemini_client(settings)
+    """The configured multimodal model, or None for the labelled mock.
+
+    Order: priority Gemini key, then the fallback key (on any failure of the first), then Cerebras.
+    """
+    primary: VisionModel | None = None
+    if settings.use_gemini:
+        for api_key in settings.gemini_api_keys:
+            chain = _gemini_chain(settings, api_key)
+            primary = chain if primary is None else FallbackVisionModel(primary, chain)
     fallback = _cerebras_client(settings)
-    if primary is not None:
-        rate_limit_fallback = _gemini_client(
-            settings, model=settings.gemini_rate_limit_fallback_model
-        )
-        if rate_limit_fallback is not None:
-            primary = FallbackVisionModel(
-                primary, rate_limit_fallback, fallback_on=GeminiRateLimitError
-            )
-        if fallback is not None:
-            return FallbackVisionModel(primary, fallback)
-        return primary
+    if primary is not None and fallback is not None:
+        return FallbackVisionModel(primary, fallback)
     return primary or fallback
 
 
@@ -161,21 +164,21 @@ _speech_clients: dict[tuple[object, ...], SpeechRecognizer] = {}
 
 def get_transcription_service(settings: SettingsDep) -> TranscriptionService:
     recognizers: list[SpeechRecognizer] = []
-    if settings.speech_uses_gemini and settings.gemini_api_key is not None:
-        api_key = settings.gemini_api_key.get_secret_value()
-        gemini_key = (
-            "gemini",
-            api_key,
-            settings.speech_gemini_model,
-            settings.speech_timeout_seconds,
-        )
-        if gemini_key not in _speech_clients:
-            _speech_clients[gemini_key] = GeminiSpeechClient(
-                api_key=api_key,
-                model=settings.speech_gemini_model,
-                timeout_seconds=settings.speech_timeout_seconds,
+    if settings.speech_uses_gemini:
+        for api_key in settings.gemini_api_keys:
+            gemini_key = (
+                "gemini",
+                api_key,
+                settings.speech_gemini_model,
+                settings.speech_timeout_seconds,
             )
-        recognizers.append(_speech_clients[gemini_key])
+            if gemini_key not in _speech_clients:
+                _speech_clients[gemini_key] = GeminiSpeechClient(
+                    api_key=api_key,
+                    model=settings.speech_gemini_model,
+                    timeout_seconds=settings.speech_timeout_seconds,
+                )
+            recognizers.append(_speech_clients[gemini_key])
     project = settings.speech_project
     if settings.speech_uses_google and project is not None:
         google_key = (
