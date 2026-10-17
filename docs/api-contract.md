@@ -260,6 +260,23 @@ browser tab and always translates from the original result.
 | 502 | `translation_unavailable` | The AI provider failed or changed the result's structure (after one retry) |
 | 503 | `translation_unavailable` | AI analysis is not configured (mock mode results are English only) |
 
+## `POST /speak`
+
+Reads text aloud with Gemini text-to-speech (`gemini-3.8-flash-lite-tts`, falling back to
+`gemini-3.8-flash-tts`; retried once on 429/5xx). The web app sends the result's main points
+(cause, urgency, summary, first three steps) in the result's language, prefetches the clip when the
+result appears, and falls back to the browser's own speech voice if this call fails. Text and audio
+are not stored or logged. Capped per IP (`ROOTCAUSE_TTS_REQUESTS_PER_IP_HOUR`, default 120).
+
+JSON body: `{ "text": "..." }` (1–1200 characters). 200 response: `audio/wav` (24 kHz mono).
+
+| Status | Code | When |
+| --- | --- | --- |
+| 422 | `validation_error` | Empty or over 1200 characters |
+| 429 | `speak_limit` | Hourly per-IP cap reached (`Retry-After` set) |
+| 502 | `speech_failed` | Every TTS model failed |
+| 503 | `speech_unavailable` | No `GEMINI_API_KEY`, or `ROOTCAUSE_TTS_ENABLED=false` |
+
 ## `POST /transcribe`
 
 Voice input for the symptom description. Gemini (`gemini-flash-lite-latest`) when `GEMINI_API_KEY`

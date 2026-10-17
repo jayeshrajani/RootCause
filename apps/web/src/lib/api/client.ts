@@ -241,3 +241,17 @@ export async function transcribeAudio(
   }
   return body as Transcription;
 }
+
+const SPEAK_TIMEOUT_MS = 45_000;
+
+/** Gemini text-to-speech for a result summary; resolves to a playable WAV blob. */
+export async function speakText(text: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/speak`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+    signal: withTimeout(signal, SPEAK_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Read-aloud failed (HTTP ${response.status})`);
+  return response.blob();
+}

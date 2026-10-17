@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     # Voice input. "auto" uses Gemini (language auto-detected) when GEMINI_API_KEY is set, with
     # Google Cloud Speech-to-Text V2 as a fallback when a project is configured.
     speech_enabled: bool = True
+    # Read-aloud of results (Gemini TTS; uses GEMINI_API_KEY). Models are tried in order.
+    tts_enabled: bool = True
+    tts_models: list[str] = Field(
+        default_factory=lambda: ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"]
+    )
+    tts_voice: str = "Kore"
+    tts_requests_per_ip_hour: int = Field(default=120, ge=0)
     speech_provider: Literal["auto", "gemini", "google"] = "auto"
     speech_gemini_model: str = "gemini-flash-lite-latest"
     # Speech-to-Text V2. Project defaults to GOOGLE_CLOUD_PROJECT_ID; credentials come from

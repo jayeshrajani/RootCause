@@ -7,6 +7,7 @@ import { Camera, ChevronDown, FlaskConical, MapPin, MessageSquareText, Sparkles,
 import { BotanicalPattern } from "@/components/brand/botanical";
 import { CONFIDENCE_DISPLAY, DATA_SOURCE_STATUS_DISPLAY, formatTimestamp, URGENCY_DISPLAY } from "@/components/triage/display";
 import { ConfidenceMeter } from "@/components/triage/possible-causes";
+import { ReadAloud, readAloudScript } from "@/components/triage/read-aloud";
 import { cn } from "@/lib/utils";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import type { Crop, SourceKind, TriageResponse } from "@/types/triage";
@@ -87,13 +88,23 @@ export function SummaryCard({ result }: { result: TriageResponse }) {
   const farmerText = farmer ? farmerWords(farmer.observation) : null;
   const notChecked = result.evidence.filter((item) => item.availability !== "available");
   const hasLocation = Boolean(result.location_label || result.approximate_location);
+  const script = readAloudScript({
+    heading: top ? `${crop.name}: ${disease}.` : `${crop.name}.`,
+    urgency: `${t(URGENCY_KEYS[result.urgency])} ${t("urgencyWord")}. ${t(ADVICE_KEYS[result.urgency])}`,
+    summary: result.summary,
+    nextLabel: t("readAloudNext"),
+    actions: result.recommended_actions.map((action) => action.action),
+  });
 
   return (
     <motion.section aria-label={t("triage")} initial={{ opacity: 0, y: 20, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.8, ease: EASE }} className="relative overflow-hidden rounded-[28px] bg-forest-900 p-6 text-mint-100 sm:p-7">
       <BotanicalPattern className="text-mint-300/[0.06]" />
       <div className="relative space-y-6">
         <header>
+          <div className="flex items-start justify-between gap-3">
           <p className="text-lg font-medium text-mint-300">{crop.name}{crop.note ? <span className="ml-2 text-xs font-normal text-mint-200/50">{crop.note}</span> : null}</p>
+            <ReadAloud script={script} language={result.response_language ?? "en"} />
+          </div>
           <h1 className="mt-1 text-[clamp(1.9rem,6vw,2.6rem)] leading-[1.02] font-medium">{disease}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             {diseaseNote ? <span className="text-sm text-mint-200/70">{diseaseNote}</span> : null}

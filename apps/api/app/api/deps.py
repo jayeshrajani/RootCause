@@ -6,6 +6,7 @@ from app.core.config import Settings, get_settings
 from app.integrations.cerebras import CerebrasClient
 from app.integrations.gemini import GeminiClient, GeminiRateLimitError
 from app.integrations.gemini_speech import GeminiSpeechClient
+from app.integrations.gemini_tts import GeminiSpeechSynthesizer
 from app.integrations.google_speech import GoogleSpeechClient, SpeechRecognizer
 from app.integrations.open_meteo import OpenMeteoClient
 from app.integrations.vision import FallbackVisionModel, VisionModel
@@ -41,6 +42,31 @@ def get_investigation_limiter(request: Request, settings: SettingsDep) -> Invest
 
 
 InvestigationLimiterDep = Annotated[InvestigationLimiter, Depends(get_investigation_limiter)]
+
+
+def get_speak_limiter(request: Request, settings: SettingsDep) -> InvestigationLimiter:
+    limiter: InvestigationLimiter | None = getattr(request.app.state, "speak_limiter", None)
+    if limiter is None:
+        limiter = InvestigationLimiter(
+            session_limit=0, ip_limit_per_hour=settings.tts_requests_per_ip_hour
+        )
+        request.app.state.speak_limiter = limiter
+    return limiter
+
+
+_synthesizers: dict[tuple[object, ...], GeminiSpeechSynthesizer] = {}
+
+
+def get_speech_synthesizer(settings: SettingsDep) -> GeminiSpeechSynthesizer | None:
+    if not settings.tts_enabled or settings.gemini_api_key is None:
+        return None
+    api_key = settings.gemini_api_key.get_secret_value()
+    key = (api_key, tuple(settings.tts_models), settings.tts_voice)
+    if key not in _synthesizers:
+        _synthesizers[key] = GeminiSpeechSynthesizer(
+            api_key=api_key, models=settings.tts_models, voice=settings.tts_voice
+        )
+    return _synthesizers[key]
 
 
 def get_satellite_service(request: Request) -> SatelliteService:
