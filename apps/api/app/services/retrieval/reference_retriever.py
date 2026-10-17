@@ -15,8 +15,11 @@ from app.core.config import Settings, get_settings
 from app.services.retrieval.dataset_registry import SupportedCrop, resolve_local_uri
 from app.services.retrieval.embeddings import (
     DINOV2_SMALL,
+    GEMINI_EMBEDDING_2,
     Dinov2Embedder,
+    EmbeddingSpec,
     ImageEmbedder,
+    MemoizedEmbedder,
     default_model_dir,
 )
 from app.services.retrieval.errors import (
@@ -156,30 +159,54 @@ class ReferenceRetriever:
         )
 
 
+def embedding_spec(settings: Settings) -> EmbeddingSpec:
+    return GEMINI_EMBEDDING_2 if settings.retrieval_embedder == "gemini" else DINOV2_SMALL
+
+
 def index_root(settings: Settings, data_dir: Path | None = None) -> Path:
+    """Folder holding index versions for the configured embedder (one subfolder per model)."""
     root = settings.retrieval_index_dir
     base = data_dir or settings.data_dir
     if root is None and base is not None:
-        root = base / "artifacts" / "faiss" / DINOV2_SMALL.slug
+        root = base / "artifacts" / "faiss" / embedding_spec(settings).slug
     if root is None:
         raise IndexUnavailableError("set ROOTCAUSE_RETRIEVAL_INDEX_DIR or ROOTCAUSE_DATA_DIR")
     return root
+
+
+def create_embedder(settings: Settings, data_dir: Path | None = None) -> ImageEmbedder:
+    """The configured embedder. DINOv2 is returned unloaded; call `load()` before use."""
+    if settings.retrieval_embedder == "gemini":
+        from app.services.retrieval.gemini_embedder import GeminiImageEmbedder
+
+        if settings.gemini_api_key is None:
+            raise IndexUnavailableError("GEMINI_API_KEY is required for Gemini embeddings")
+        return GeminiImageEmbedder(
+            settings.gemini_api_key.get_secret_value(),
+            timeout_seconds=settings.retrieval_embedding_timeout_seconds,
+        )
+    model_dir = settings.embedding_model_dir
+    base = data_dir or settings.data_dir
+    if model_dir is None:
+        if base is None:
+            raise IndexUnavailableError("set ROOTCAUSE_EMBEDDING_MODEL_DIR or ROOTCAUSE_DATA_DIR")
+        model_dir = default_model_dir(base)
+    return Dinov2Embedder(model_dir)
 
 
 def load_reference_retriever(settings: Settings) -> ReferenceRetriever:
     """Build the process-wide retriever from settings. Loads the model and verifies the index."""
     if settings.retrieval_index_version is None:
         raise IndexUnavailableError("ROOTCAUSE_RETRIEVAL_INDEX_VERSION is not set")
-    model_dir = settings.embedding_model_dir
-    if model_dir is None:
-        if settings.data_dir is None:
-            raise IndexUnavailableError("set ROOTCAUSE_EMBEDDING_MODEL_DIR or ROOTCAUSE_DATA_DIR")
-        model_dir = default_model_dir(settings.data_dir)
-    embedder = Dinov2Embedder(model_dir)
+    embedder = create_embedder(settings)
     index = load_reference_index(
         index_root(settings) / settings.retrieval_index_version, embedder.spec
     )
-    embedder.load()
+    if isinstance(embedder, Dinov2Embedder):
+        embedder.load()
+    else:
+        # Hosted embeddings are billed per call; identification and triage reuse the vectors.
+        embedder = MemoizedEmbedder(embedder)
     return ReferenceRetriever(embedder, index, data_dir=settings.data_dir)
 
 

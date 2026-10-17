@@ -1,12 +1,15 @@
-"""Embed manifest images with DINOv2 and build versioned per-crop FAISS indexes.
+"""Embed manifest images (DINOv2 or Gemini Embedding 2) and build versioned per-crop FAISS indexes.
 
-Usage (from apps/api, with the retrieval extra and model installed):
+Usage (from apps/api):
 
     python scripts/build_index.py --data-dir C:/rootcause-data --index-version v1
+    python scripts/build_index.py --data-dir ~/rcdata --index-version v2 --embedder gemini
 
-Reference and evaluation images are embedded (evaluation vectors are cached for the evaluation
-script but never indexed). Re-running skips images already embedded with the same model revision
-and preprocessing. An existing index version is never overwritten with different contents.
+DINOv2 needs the retrieval extra and local weights; Gemini needs the index extra and
+GEMINI_API_KEY (billed per image). Reference and evaluation images are embedded (evaluation
+vectors are cached for the evaluation script but never indexed). Every vector is saved as soon as
+it is made, so re-running after an interruption only embeds what is missing. An existing index
+version is never overwritten with different contents.
 """
 
 import argparse
@@ -32,10 +35,9 @@ from app.services.retrieval.dataset_registry import (
     validate_manifest,
 )
 from app.services.retrieval.embeddings import (
-    DINOV2_SMALL,
     Dinov2Embedder,
     EmbeddingCache,
-    default_model_dir,
+    ImageEmbedder,
     embed_with_cache,
 )
 from app.services.retrieval.errors import RetrievalError
@@ -45,7 +47,8 @@ from app.services.retrieval.faiss_index import (
     build_index_artifacts,
     read_index_manifest,
 )
-from app.services.retrieval.reference_retriever import index_root
+from app.services.retrieval.gemini_embedder import MAX_IMAGES_PER_CALL
+from app.services.retrieval.reference_retriever import create_embedder, embedding_spec, index_root
 
 DEFAULT_MANIFEST_DIR = Path(__file__).resolve().parents[1] / "data" / "manifests"
 
@@ -70,11 +73,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--data-dir", type=Path, help="Defaults to ROOTCAUSE_DATA_DIR.")
     parser.add_argument("--manifest-dir", type=Path, default=DEFAULT_MANIFEST_DIR)
     parser.add_argument("--index-version", required=True, help="e.g. v1 (immutable once built)")
-    parser.add_argument("--model-dir", type=Path)
+    parser.add_argument(
+        "--embedder",
+        choices=("dinov2", "gemini"),
+        help="Defaults to ROOTCAUSE_RETRIEVAL_EMBEDDER (dinov2).",
+    )
+    parser.add_argument("--model-dir", type=Path, help="DINOv2 weights folder.")
     parser.add_argument("--force", action="store_true", help="Replace an existing version.")
     args = parser.parse_args(argv)
 
     settings = Settings()
+    if args.embedder:
+        settings = settings.model_copy(update={"retrieval_embedder": args.embedder})
     data_dir: Path | None = args.data_dir or settings.data_dir
     if data_dir is None:
         print("Set --data-dir or ROOTCAUSE_DATA_DIR.", file=sys.stderr)
@@ -85,7 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "--index-version may contain only letters, digits, '.', '_' and '-'.", file=sys.stderr
         )
         return 2
-    spec = DINOV2_SMALL
+    spec = embedding_spec(settings)
 
     records: dict[SupportedCrop, list[ManifestRecord]] = {}
     source_manifests: dict[str, str] = {}
@@ -98,17 +108,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{crop} manifest is invalid: {'; '.join(problems)}", file=sys.stderr)
             return 1
 
-    embedder = Dinov2Embedder(args.model_dir or default_model_dir(data_dir, spec), spec=spec)
     cache = EmbeddingCache(data_dir / "embeddings", spec)
     every = [r for crop_records in records.values() for r in crop_records]
     items = list(dict.fromkeys((r.image_uri, r.sha256) for r in every))
+    gemini = settings.retrieval_embedder == "gemini"
+
+    def progress(done: int, total: int) -> None:
+        if done == total or done % (MAX_IMAGES_PER_CALL * 10) == 0:
+            print(f"  embedded {done}/{total}", flush=True)
+
     try:
-        embedder.load()
+        embedder: ImageEmbedder = (
+            Dinov2Embedder(args.model_dir, spec=spec)
+            if args.model_dir and not gemini
+            else create_embedder(settings, data_dir)
+        )
+        if isinstance(embedder, Dinov2Embedder):
+            embedder.load()
+        print(f"Embedding with {spec.model_id} ({spec.dimension} dimensions)")
         report = embed_with_cache(
-            items, lambda uri: resolve_local_uri(data_dir, uri).read_bytes(), embedder, cache
+            items,
+            lambda uri: resolve_local_uri(data_dir, uri).read_bytes(),
+            embedder,
+            cache,
+            # One API call per batch, so an interruption loses at most one call.
+            batch_size=MAX_IMAGES_PER_CALL if gemini else 32,
+            progress=progress if gemini else None,
         )
     except RetrievalError as exc:
         print(f"Embedding failed: {exc}", file=sys.stderr)
+        print("Vectors made so far are saved; re-run the same command to resume.", file=sys.stderr)
         return 1
     failed = report.failed or {}
     print(f"Embeddings: {report.cached} cached, {report.embedded} new, {len(failed)} failed")

@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # FAISS index root (holds one folder per version) and the version to serve.
     retrieval_index_dir: Path | None = None
     retrieval_index_version: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._-]{1,64}$")
+    # Embedder for the reference library: local DINOv2 or hosted Gemini Embedding 2 (needs
+    # GEMINI_API_KEY). Must match the embedder the index version was built with.
+    retrieval_embedder: Literal["dinov2", "gemini"] = "dinov2"
+    retrieval_embedding_timeout_seconds: float = Field(default=20, gt=0, le=120)
 
     # Google Earth Engine satellite evidence. Credentials come from ADC (local) or the
     # attached service account / workload identity (production); never from files in Git.

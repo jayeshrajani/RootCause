@@ -3,6 +3,10 @@
 Usage (from apps/api):
 
     python scripts/evaluate_retrieval.py --data-dir C:/rootcause-data --index-version v1
+    python scripts/evaluate_retrieval.py --data-dir ~/rcdata --index-version v2 --embedder gemini
+
+Query vectors come from the cache written by build_index.py, so a Gemini evaluation only calls
+the API for the latency sample (--latency-samples, default 5 for Gemini, 0 to skip).
 
 Per crop: Recall@K (share of queries with at least one same-label reference in the top K),
 Precision@K (share of top-K references with the query's label), top-1 label agreement, a
@@ -28,13 +32,12 @@ from app.services.retrieval.dataset_registry import (
     resolve_local_uri,
 )
 from app.services.retrieval.embeddings import (
-    DINOV2_SMALL,
     Dinov2Embedder,
     EmbeddingCache,
-    default_model_dir,
+    ImageEmbedder,
 )
 from app.services.retrieval.faiss_index import load_reference_index
-from app.services.retrieval.reference_retriever import index_root
+from app.services.retrieval.reference_retriever import create_embedder, embedding_spec, index_root
 
 DEFAULT_MANIFEST_DIR = Path(__file__).resolve().parents[1] / "data" / "manifests"
 
@@ -44,21 +47,35 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--data-dir", type=Path, help="Defaults to ROOTCAUSE_DATA_DIR.")
     parser.add_argument("--manifest-dir", type=Path, default=DEFAULT_MANIFEST_DIR)
     parser.add_argument("--index-version", required=True)
+    parser.add_argument("--embedder", choices=("dinov2", "gemini"))
     parser.add_argument("--k", type=int, default=5)
-    parser.add_argument("--latency-samples", type=int, default=20)
+    parser.add_argument("--latency-samples", type=int)
     args = parser.parse_args(argv)
 
     settings = Settings()
+    if args.embedder:
+        settings = settings.model_copy(update={"retrieval_embedder": args.embedder})
     data_dir: Path | None = args.data_dir or settings.data_dir
     if data_dir is None:
         print("Set --data-dir or ROOTCAUSE_DATA_DIR.", file=sys.stderr)
         return 2
     data_dir = data_dir.resolve()
-    spec = DINOV2_SMALL
+    hosted = settings.retrieval_embedder == "gemini"
+    latency_samples = (
+        args.latency_samples if args.latency_samples is not None else (5 if hosted else 20)
+    )
+    spec = embedding_spec(settings)
     index = load_reference_index(index_root(settings, data_dir) / args.index_version, spec)
     cache = EmbeddingCache(data_dir / "embeddings", spec)
-    embedder = Dinov2Embedder(default_model_dir(data_dir, spec), spec=spec)
-    embedder.load()
+    loaded: list[ImageEmbedder] = []
+
+    def embedder() -> ImageEmbedder:
+        if not loaded:
+            created = create_embedder(settings, data_dir)
+            if isinstance(created, Dinov2Embedder):
+                created.load()
+            loaded.append(created)
+        return loaded[0]
 
     report: dict[str, object] = {"index_version": index.version, "k": args.k, "crops": {}}
     print(f"Index {index.version} · {spec.model_id} · K={args.k}")
@@ -82,7 +99,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             vector = cache.get(record.sha256)
             if vector is None:
                 data = resolve_local_uri(data_dir, record.image_uri).read_bytes()
-                vector = embedder.embed([data])[0]
+                vector = embedder().embed([data])[0]
             started = time.perf_counter()
             _, rows = crop_index.search(vector[None, :], args.k)
             search_ms.append((time.perf_counter() - started) * 1000)
@@ -133,21 +150,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"  top-1 {values['top1_label_agreement']}"
             )
 
-    sample = all_eval_paths[: args.latency_samples]
+    sample = all_eval_paths[:latency_samples]
     timings = []
     for path in sample:
         data = path.read_bytes()
         started = time.perf_counter()
-        embedder.embed([data])
+        embedder().embed([data])
         timings.append((time.perf_counter() - started) * 1000)
-    report["embedding_ms_per_image"] = {
-        "samples": len(timings),
-        "p50": round(statistics.median(timings), 1),
-        "max": round(max(timings), 1),
-        "device": "cpu",
-    }
-    print(f"Embedding latency (CPU, 1 image): p50 {report['embedding_ms_per_image']['p50']} ms "  # type: ignore[index]
-          f"over {len(timings)} images")  # fmt: skip
+    device = "gemini-api" if hosted else "cpu"
+    if timings:
+        report["embedding_ms_per_image"] = {
+            "samples": len(timings),
+            "p50": round(statistics.median(timings), 1),
+            "max": round(max(timings), 1),
+            "device": device,
+        }
+        print(f"Embedding latency ({device}, 1 image): p50 "
+              f"{report['embedding_ms_per_image']['p50']} ms over {len(timings)} images")  # type: ignore[index]  # fmt: skip
     out = data_dir / "reports" / f"retrieval_eval_{index.version}.json"
     atomic_write_bytes(out, (json.dumps(report, indent=2) + "\n").encode("utf-8"))
     print(f"Report written to {out}")

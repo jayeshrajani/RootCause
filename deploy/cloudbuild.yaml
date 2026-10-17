@@ -1,12 +1,19 @@
 # Builds both images and deploys them to Cloud Run. Run from the repo root:
 #   gcloud builds submit --config deploy/cloudbuild.yaml --substitutions=_API_URL=https://<api-url>,_WEB_URL=https://<web-url>
 # _API_URL is baked into the web bundle; _WEB_URL becomes the API's CORS origin.
+# _DATA_BUCKET holds the reference index (artifacts/faiss/<model>/<version>/), mounted read-only.
 substitutions:
   _REGION: asia-south1
   _REPO: rootcause
   _API_SA: rootcause
   _API_URL: ""
   _WEB_URL: ""
+  _DATA_BUCKET: ${PROJECT_ID}-rootcause-data
+  _INDEX_VERSION: v2
+  _EMBEDDER: gemini
+
+options:
+  dynamicSubstitutions: true
 
 steps:
   - id: build-api
@@ -39,13 +46,17 @@ steps:
       - --region=${_REGION}
       - --service-account=${_API_SA}@$PROJECT_ID.iam.gserviceaccount.com
       - --allow-unauthenticated
+      - --execution-environment=gen2
       - --cpu=1
       - --memory=1Gi
       - --concurrency=8
       - --timeout=60
       - --cpu-boost
       - --min-instances=0
-      - '--set-env-vars=^@^GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID@ROOTCAUSE_CORS_ORIGINS=["${_WEB_URL}"]'
+      - --max-instances=3
+      - --add-volume=name=data,type=cloud-storage,bucket=${_DATA_BUCKET},readonly=true
+      - --add-volume-mount=volume=data,mount-path=/data
+      - '--set-env-vars=^@^GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID@ROOTCAUSE_CORS_ORIGINS=["${_WEB_URL}"]@ROOTCAUSE_DATA_DIR=/data@ROOTCAUSE_RETRIEVAL_INDEX_VERSION=${_INDEX_VERSION}@ROOTCAUSE_RETRIEVAL_EMBEDDER=${_EMBEDDER}'
       - --set-secrets=GEMINI_API_KEY=gemini-api-key:latest,CEREBRAS_API_KEY=cerebras-api-key:latest
   - id: deploy-web
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -60,6 +71,7 @@ steps:
       - --cpu=1
       - --memory=512Mi
       - --min-instances=0
+      - --max-instances=3
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$BUILD_ID

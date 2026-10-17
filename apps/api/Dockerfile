@@ -7,7 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY app ./app
-RUN pip install .
+# FAISS only: reference photos are embedded with Gemini, so torch/DINOv2 are not needed here.
+RUN pip install ".[index]"
 
 RUN useradd --system --uid 10001 rootcause
 USER rootcause

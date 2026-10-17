@@ -31,6 +31,10 @@ dev = [
 datasets = [
   "py7zr>=0.22",
 ]
+# FAISS search only: enough to serve an index built with hosted Gemini embeddings (no torch).
+index = [
+  "faiss-cpu==1.15.1",
+]
 # DINOv2 embeddings and FAISS retrieval. Pinned: embeddings must stay reproducible.
 # In Linux containers install torch from https://download.pytorch.org/whl/cpu (CPU-only build).
 retrieval = [

@@ -1,8 +1,8 @@
-"""DINOv2 image embeddings shared by reference indexing and farmer queries.
+"""Image embeddings shared by reference indexing and farmer queries (DINOv2 or Gemini).
 
 Reference and query images must be embedded with the same model revision and preprocessing.
-Vectors from other models (e.g. Gemini Embedding 2) live in a different space and must never be
-compared with these.
+Vectors from different specs (e.g. DINOv2 vs Gemini Embedding 2) live in different spaces and
+must never be compared; every index records its spec and refuses a mismatched embedder.
 """
 
 import hashlib
@@ -10,6 +10,7 @@ import io
 import os
 import tempfile
 import threading
+from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,7 +20,12 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image, ImageOps
 
-from app.services.retrieval.errors import EmbeddingError, InvalidQueryError, RetrievalError
+from app.services.retrieval.errors import (
+    EmbeddingError,
+    EmbeddingProviderError,
+    InvalidQueryError,
+    RetrievalError,
+)
 
 Vectors = NDArray[np.float32]
 
@@ -52,6 +58,18 @@ DINOV2_SMALL = EmbeddingSpec(
     dimension=384,
 )
 
+# Hosted model: no local weights, so there is no checksum to pin.
+GEMINI_EMBEDDING_2 = EmbeddingSpec(
+    model_id="google/gemini-embedding-2",
+    model_revision="gemini-embedding-2",
+    weights_sha256="",
+    preprocessing_version="exif-rgb-max768-jpeg90-v1",
+    dimension=768,
+)
+
+_GEMINI_MAX_EDGE = 768
+_GEMINI_JPEG_QUALITY = 90
+
 
 def default_model_dir(data_dir: Path, spec: EmbeddingSpec = DINOV2_SMALL) -> Path:
     return data_dir / "models" / spec.slug / spec.model_revision
@@ -68,11 +86,7 @@ class ImageEmbedder(Protocol):
 
 def preprocess(data: bytes) -> NDArray[np.float32]:
     """EXIF-orient, RGB, resize short edge to 256 (bicubic), centre-crop 224, ImageNet-normalise."""
-    try:
-        with Image.open(io.BytesIO(data)) as opened:
-            image = ImageOps.exif_transpose(opened).convert("RGB")
-    except (Image.DecompressionBombError, OSError, SyntaxError, ValueError) as exc:
-        raise InvalidQueryError(f"unreadable image ({type(exc).__name__})") from exc
+    image = _open_rgb(data)
     width, height = image.size
     scale = _RESIZE_SHORT_EDGE / min(width, height)
     size = (max(_CROP, round(width * scale)), max(_CROP, round(height * scale)))
@@ -81,6 +95,27 @@ def preprocess(data: bytes) -> NDArray[np.float32]:
     image = image.crop((left, top, left + _CROP, top + _CROP))
     pixels = (np.asarray(image, dtype=np.float32) / 255.0 - _MEAN) / _STD
     return np.ascontiguousarray(pixels.transpose(2, 0, 1), dtype=np.float32)
+
+
+def prepare_jpeg(data: bytes) -> bytes:
+    """EXIF-orient, RGB, shrink the long edge to at most 768 px, JPEG q90 (Gemini preprocessing).
+
+    Gemini Embedding 2 accepts only PNG/JPEG; one consistent re-encode also keeps reference and
+    query images comparable and request sizes small.
+    """
+    image = _open_rgb(data)
+    image.thumbnail((_GEMINI_MAX_EDGE, _GEMINI_MAX_EDGE), Image.Resampling.BICUBIC)
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=_GEMINI_JPEG_QUALITY)
+    return buffer.getvalue()
+
+
+def _open_rgb(data: bytes) -> Image.Image:
+    try:
+        with Image.open(io.BytesIO(data)) as opened:
+            return ImageOps.exif_transpose(opened).convert("RGB")
+    except (Image.DecompressionBombError, OSError, SyntaxError, ValueError) as exc:
+        raise InvalidQueryError(f"unreadable image ({type(exc).__name__})") from exc
 
 
 def l2_normalize(vectors: NDArray[Any]) -> Vectors:
@@ -170,6 +205,43 @@ class Dinov2Embedder:
         return vectors
 
 
+class MemoizedEmbedder:
+    """Remembers recent vectors by image checksum, so a photo is embedded (and billed) once.
+
+    Crop identification and triage both embed the same farmer photos; this halves those calls.
+    """
+
+    def __init__(self, inner: ImageEmbedder, *, max_items: int = 256) -> None:
+        self._inner = inner
+        self._max_items = max_items
+        self._vectors: OrderedDict[str, NDArray[np.float32]] = OrderedDict()
+        self._lock = threading.Lock()
+
+    @property
+    def spec(self) -> EmbeddingSpec:
+        return self._inner.spec
+
+    def embed(self, images: Sequence[bytes]) -> Vectors:
+        keys = [hashlib.sha256(data).hexdigest() for data in images]
+        with self._lock:
+            known = {key: self._vectors[key] for key in keys if key in self._vectors}
+            for key in known:
+                self._vectors.move_to_end(key)
+        missing = list(dict.fromkeys(key for key in keys if key not in known))
+        if missing:
+            by_key = dict(zip(keys, images, strict=True))
+            fresh = self._inner.embed([by_key[key] for key in missing])
+            with self._lock:
+                for key, vector in zip(missing, fresh, strict=True):
+                    known[key] = vector
+                    self._vectors[key] = vector
+                while len(self._vectors) > self._max_items:
+                    self._vectors.popitem(last=False)
+        if not keys:
+            return np.empty((0, self.spec.dimension), dtype=np.float32)
+        return np.stack([known[key] for key in keys]).astype(np.float32, copy=False)
+
+
 class EmbeddingCache:
     """One .npy per image checksum, scoped by model revision and preprocessing version."""
 
@@ -226,11 +298,13 @@ def embed_with_cache(
     cache: EmbeddingCache,
     *,
     batch_size: int = 32,
+    progress: Callable[[int, int], None] | None = None,
 ) -> EmbedReport:
     """Embed (item_id, sha256) pairs not yet cached. Each vector is checkpointed as it is made.
 
     `read(item_id)` returns image bytes; bytes whose SHA-256 differs from the expected value are
-    recorded as failures, never embedded under the wrong key.
+    recorded as failures, never embedded under the wrong key. An `EmbeddingProviderError` stops
+    the run (re-running resumes from the cache); `progress(done, total)` follows new embeddings.
     """
     report = EmbedReport(failed={})
     assert report.failed is not None
@@ -256,14 +330,20 @@ def embed_with_cache(
         try:
             vectors = embedder.embed([data for _, _, data in batch])
             results = list(zip(batch, vectors, strict=True))
+        except EmbeddingProviderError:
+            raise
         except RetrievalError:
             results = []
             for item in batch:
                 try:
                     results.append((item, embedder.embed([item[2]])[0]))
+                except EmbeddingProviderError:
+                    raise
                 except RetrievalError as exc:
                     report.failed[item[0]] = str(exc)
         for (_, sha256, _), vector in results:
             cache.put(sha256, vector)
             report.embedded += 1
+        if progress is not None:
+            progress(report.embedded + len(report.failed), len(pending))
     return report

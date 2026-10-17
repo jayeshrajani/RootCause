@@ -17,6 +17,13 @@ class EmbeddingError(RetrievalError):
     """The embedding model is unavailable or produced an unusable vector."""
 
 
+class EmbeddingProviderError(EmbeddingError):
+    """A hosted embedding API refused or kept failing (key, billing, quota, outage).
+
+    Retrying image by image would not help, so batch jobs stop and keep their cached progress.
+    """
+
+
 class IndexUnavailableError(RetrievalError):
     """No usable index exists for the requested version or crop."""
 
